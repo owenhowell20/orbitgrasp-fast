@@ -153,6 +153,7 @@ You can change the training configuration in this file.
 
 After training, you can test the model by running the following command.
 
+* NOTE We provide the pre-trained model for the single-camera setting. You can find it in `./scripts/output/store/single/`.
 ```bash
 python ./scripts/test_grasp_single.py
 ```
