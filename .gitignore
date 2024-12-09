@@ -18,3 +18,5 @@ __pycache__/
 *.bullet
 *.pt
 *.csv
+*.py[cod]
+*$py.class
