@@ -5,19 +5,19 @@
 <a href="https://bocehu.github.io/">Boce Hu</a><sup>1</sup>,
 </span>
 <span class="author-block">
-<a href="https://zxp-s-works.github.io/">Xupeng Zhu</a><sup>$\star$1</sup>,
+<a href="https://zxp-s-works.github.io/">Xupeng Zhu</a><sup>*1</sup>,
 </span>
 <span class="author-block">
-<a href="https://www.dianwang.io/">Dian Wang</a><sup>$\star$1</sup>,
+<a href="https://www.dianwang.io/">Dian Wang</a><sup>*1</sup>,
 </span>
 <span class="author-block">
-<a href="https://www.linkedin.com/in/zihao-dong-321712212/">Zihao Dong</a><sup>$\star$1</sup>,
+<a href="https://www.linkedin.com/in/zihao-dong-321712212/">Zihao Dong</a><sup>*1</sup>,
 </span>
 <span class="author-block">
-<a href="https://haojhuang.github.io/">Haojie Huang</a><sup>$\star$1</sup>,
+<a href="https://haojhuang.github.io/">Haojie Huang</a><sup>*1</sup>,
 </span>
 <span class="author-block">
-<a href="https://www.linkedin.com/in/chenghao-wang-01a036203/">Chenghao Wang</a><sup>$\star$1</sup>,
+<a href="https://www.linkedin.com/in/chenghao-wang-01a036203/">Chenghao Wang</a><sup>*1</sup>,
 </span>
 <span class="author-block">
 <a href="https://www.robinwalters.com/">Robin Walters</a><sup>1</sup>,
@@ -142,8 +142,6 @@ Then, you can start to train the model.
 python ./scripts/train_single.py
 ```
 
-or
-
 ```bash
 python ./scripts/train_multi.py
 ```
@@ -158,8 +156,6 @@ After training, you can test the model by running the following command.
 ```bash
 python ./scripts/test_grasp_single.py
 ```
-
-or
 
 ```bash
 python ./scripts/test_grasp_multi.py
