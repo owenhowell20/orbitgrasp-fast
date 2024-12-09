@@ -1,4 +1,4 @@
-name: orbitgrasp_pt
+name: orbitgrasp
 channels:
   - pytorch
   - nvidia
