@@ -1,0 +1,54 @@
+seed: 12345
+
+training_contain_mask: True  # True for training data with mask, False for data without mask
+
+train_dataset:
+  path: "./dataset/collected_data/se3_filtered/train_multi"
+  lmax: 3
+  augment: true
+  load_harmonics: false
+  augment_ratio: 0.95
+  min_allowed_points: 700
+  max_allowed_points: 800
+
+test_dataset:
+  path: "./dataset/collected_data/se3_filtered/test_multi"
+  lmax: 3
+  augment: false
+  load_harmonics: true
+  min_allowed_points: 700
+  max_allowed_points: 800
+  load_harmony_path: "./scripts/grasp_harmonics_l3_test_multi.pt"
+
+orbit_grasper:
+  device: "cuda:0"
+  lr: 0.0001
+  load: 0
+  param_dir: "./scripts/output/store/multi"
+  num_channel: 36
+  lmax: 3
+  mmax: 2
+
+training:
+  save_interval: 1
+  log: false
+  tr_epoch: &tr_epoch_value 15
+  balance: true
+
+scheduler: LambdaLR
+scheduler_params:
+  lambda_type: cosine
+  warmup_factor: 0.2
+  warmup_epochs: -1
+  lr_min_factor: 0.01
+  epochs: *tr_epoch_value
+
+test:
+  add_noise: True
+  RUN_TIMES: 5
+  NUM_ROUNDS: 100
+  root_dir: 'output/store/multi'
+  load_epoch: 15
+  ckpt_prefix: orbitgrasp-ckpt-
+  scene: 'pile'
+  GUI: False
