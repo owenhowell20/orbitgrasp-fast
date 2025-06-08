@@ -8,14 +8,18 @@ class OrbitGrasp:
         self.device = device
         self.net = EquiformerUnet(lmax_list=[lmax], mmax_list=[mmax]).to(device)
         self.parameters = list(self.net.parameters())
-        self.optim = torch.optim.AdamW([{'params': self.net.parameters(), 'lr': lr}], weight_decay=3e-4)
+        self.optim = torch.optim.AdamW(
+            [{"params": self.net.parameters(), "lr": lr}], weight_decay=3e-4
+        )
         self.iters = 0
         self.lmax = lmax
         self.mmax = mmax
         self.num_channel = num_channel
 
-        print('mask grasp params: ', sum(p.numel()
-                                         for p in self.parameters if p.requires_grad))
+        print(
+            "mask grasp params: ",
+            sum(p.numel() for p in self.parameters if p.requires_grad),
+        )
 
     def forward(self, feature_points, grasp_indices, spherical_harmonics, train=True):
 
@@ -28,9 +32,13 @@ class OrbitGrasp:
             features = self.net(feature_points)
 
         grasp_coefficients = features.embedding[grasp_indices].squeeze(-1)
-        spherical_harmonics = spherical_harmonics.squeeze(0).to(self.device, dtype=torch.float)
+        spherical_harmonics = spherical_harmonics.squeeze(0).to(
+            self.device, dtype=torch.float
+        )
 
-        results = torch.bmm(grasp_coefficients.unsqueeze(1), spherical_harmonics.transpose(1, 2))
+        results = torch.bmm(
+            grasp_coefficients.unsqueeze(1), spherical_harmonics.transpose(1, 2)
+        )
         results = results.squeeze(1).contiguous()
         # results = torch.einsum('nk,nmk->nm', grasp_coefficients, spherical_harmonics).contiguous()
         return results
@@ -39,7 +47,9 @@ class OrbitGrasp:
         feature_pcd, grasp_indices, labels, harmonics = batch  # N; [M,P], [M,P,I]
         labels = labels.view(-1)
 
-        results = self.forward(feature_pcd, grasp_indices, harmonics, train=True).view(-1)
+        results = self.forward(feature_pcd, grasp_indices, harmonics, train=True).view(
+            -1
+        )
 
         if balance:
 
@@ -50,8 +60,12 @@ class OrbitGrasp:
                 return None
 
             smaller_group = min(positive_indices.size(0), negative_indices.size(0))
-            positive_indices = positive_indices[torch.randperm(positive_indices.size(0))[:smaller_group]]
-            negative_indices = negative_indices[torch.randperm(negative_indices.size(0))[:smaller_group]]
+            positive_indices = positive_indices[
+                torch.randperm(positive_indices.size(0))[:smaller_group]
+            ]
+            negative_indices = negative_indices[
+                torch.randperm(negative_indices.size(0))[:smaller_group]
+            ]
             balanced_index = torch.cat([positive_indices, negative_indices])
 
             results = results[balanced_index]
@@ -108,7 +122,11 @@ class OrbitGrasp:
         max_index = torch.argmax(results)
         max_pred_correct = (preds[max_index] == labels[max_index]).float()
 
-        return np.float32(loss.item()), np.float32(accuracy.item()), np.float32(max_pred_correct.item())
+        return (
+            np.float32(loss.item()),
+            np.float32(accuracy.item()),
+            np.float32(max_pred_correct.item()),
+        )
 
     def predict(self, feature_pcds, grasp_indices, spherical_harmonics):
         self.net.eval()
@@ -118,13 +136,17 @@ class OrbitGrasp:
             features_list = []
 
             sizes = [feature_pcd.x.shape[0] for feature_pcd in feature_pcds]
-            offsets = torch.cumsum(torch.tensor([0] + sizes[:-1]), dim=0).to(self.device)
+            offsets = torch.cumsum(torch.tensor([0] + sizes[:-1]), dim=0).to(
+                self.device
+            )
 
             for i, feature_pcd in enumerate(feature_pcds):
-                cur_features = features.embedding[offsets[i]:offsets[i] + sizes[i]]
+                cur_features = features.embedding[offsets[i] : offsets[i] + sizes[i]]
                 sh = spherical_harmonics[i].detach().float().to(self.device)
                 grasp_coefficients = cur_features[grasp_indices[i]].squeeze(-1)
-                results = torch.einsum('nk,nmk->nm', grasp_coefficients, sh).contiguous()
+                results = torch.einsum(
+                    "nk,nmk->nm", grasp_coefficients, sh
+                ).contiguous()
                 results_list.append(results)
                 features_list.append(grasp_coefficients)
             return results_list, features_list

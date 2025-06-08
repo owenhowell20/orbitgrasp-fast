@@ -38,24 +38,48 @@ def write_training(root, epoch, step, loss):
     append_csv(csv_path, epoch, step, loss)
 
 
-def write_test(root, success_grasp, total_grasp, total_objs, grasped_objs, remain_objs, success_rate, declutter_rate,
-               scene='packed'):
+def write_test(
+    root,
+    success_grasp,
+    total_grasp,
+    total_objs,
+    grasped_objs,
+    remain_objs,
+    success_rate,
+    declutter_rate,
+    scene="packed",
+):
     csv_path = os.path.join(root, f"{scene}_test_acc.csv")
     if not os.path.exists(csv_path):
         create_csv(
             csv_path,
-            ["success_grasp", "total_grasp", "total_objs", 'grasped_objs', 'remain_objs', 'success_rate',
-             'declutter_rate'],
+            [
+                "success_grasp",
+                "total_grasp",
+                "total_objs",
+                "grasped_objs",
+                "remain_objs",
+                "success_rate",
+                "declutter_rate",
+            ],
         )
-    append_csv(csv_path, success_grasp, total_grasp, total_objs, grasped_objs, remain_objs, success_rate,
-               declutter_rate)
+    append_csv(
+        csv_path,
+        success_grasp,
+        total_grasp,
+        total_objs,
+        grasped_objs,
+        remain_objs,
+        success_rate,
+        declutter_rate,
+    )
 
 
-def write_log(root, test_loss, success_rate, max_success_rate, scene='packed'):
+def write_log(root, test_loss, success_rate, max_success_rate, scene="packed"):
     csv_path = os.path.join(root, f"{scene}_test_log.csv")
     if not os.path.exists(csv_path):
         create_csv(
             csv_path,
-            ['test_loss', 'success_rate'],
+            ["test_loss", "success_rate"],
         )
     append_csv(csv_path, test_loss, success_rate)

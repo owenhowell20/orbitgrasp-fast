@@ -4,7 +4,7 @@ import time
 
 file_dir = os.path.dirname(__file__)
 sys.path.append(file_dir)
-sys.path.append('..')
+sys.path.append("..")
 import numpy as np
 from pathlib import Path
 import torch
@@ -21,26 +21,43 @@ from sam3d import filter_masks, get_mask_rgb
 
 
 class ClutterRemovalSim(object):
-    def __init__(self, scene, object_set, gui=True, seed=None, rand=False, load_sam=False, n_intervals=36):
+    def __init__(
+        self,
+        scene,
+        object_set,
+        gui=True,
+        seed=None,
+        rand=False,
+        load_sam=False,
+        n_intervals=36,
+    ):
         assert scene in ["pile", "packed", "obj", "egad"]
-        self.urdf_root = Path(f"{os.path.abspath(os.path.dirname(__file__))}/data_robot/urdfs/")
+        self.urdf_root = Path(
+            f"{os.path.abspath(os.path.dirname(__file__))}/data_robot/urdfs/"
+        )
 
         self.scene = scene
-        self.object_set = f'{scene}/{object_set}'
+        self.object_set = f"{scene}/{object_set}"
         # get the list of urdf files or obj files
         self.discover_objects()
         self.rand = rand
         self.global_scaling = {
             "blocks": 1.67,
             "google": 0.7,
-            'google_pile': 0.7,
-            'google_packed': 0.7,
+            "google_pile": 0.7,
+            "google_packed": 0.7,
         }.get(object_set, 1.0)
 
         self.random_rotations_limit = np.pi * 2.0
         self.n_intervals = n_intervals
         self.mask_generator = None
-        self.colormaps, self.heightmaps, self.segmaps, self.maskmaps, self.maskrgbmaps = None, None, None, None, None
+        (
+            self.colormaps,
+            self.heightmaps,
+            self.segmaps,
+            self.maskmaps,
+            self.maskrgbmaps,
+        ) = (None, None, None, None, None)
         self.pcds_xyz, self.pcds_rgb, self.pcds_masks = None, None, None
 
         self.gui = gui
@@ -53,9 +70,13 @@ class ClutterRemovalSim(object):
         X_center = 0.15
         Y_center = 0.15
         Z = 0.05
-        self.workspace = np.asarray([[X_center - self.size / 2, X_center + self.size / 2],
-                                     [Y_center - self.size / 2, Y_center + self.size / 2],
-                                     [Z, Z + self.size]])
+        self.workspace = np.asarray(
+            [
+                [X_center - self.size / 2, X_center + self.size / 2],
+                [Y_center - self.size / 2, Y_center + self.size / 2],
+                [Z, Z + self.size],
+            ]
+        )
 
         if load_sam:
             self.loadSAM()
@@ -63,12 +84,17 @@ class ClutterRemovalSim(object):
 
     @property
     def num_objects(self):
-        return max(0, self.world.p.getNumBodies() - 2)  # remove table and the gripper from body count
+        return max(
+            0, self.world.p.getNumBodies() - 2
+        )  # remove table and the gripper from body count
 
-    def loadSAM(self, pretrain_name='pretrained/sam_vit_h_4b8939.pth', cuda_device='cuda:0'):
+    def loadSAM(
+        self, pretrain_name="pretrained/sam_vit_h_4b8939.pth", cuda_device="cuda:0"
+    ):
         self.sam_checkpoint_path = Path.cwd().parent / pretrain_name
         self.mask_generator = SamAutomaticMaskGenerator(
-            build_sam(checkpoint=self.sam_checkpoint_path).to(device=cuda_device))
+            build_sam(checkpoint=self.sam_checkpoint_path).to(device=cuda_device)
+        )
 
     def discover_objects(self):
         root = self.urdf_root / self.object_set
@@ -82,7 +108,15 @@ class ClutterRemovalSim(object):
     def restore_state(self):
         self.world.restore_state(self._snapshot_id)
 
-    def reset(self, object_count, index=None, color_=None, pose_=None, from_save=False, offset=0.0625):
+    def reset(
+        self,
+        object_count,
+        index=None,
+        color_=None,
+        pose_=None,
+        from_save=False,
+        offset=0.0625,
+    ):
         self.heightmaps, self.colormaps, self.segmaps = None, None, None
         self.maskmaps, self.maskrgbmaps = None, None
         self.pcds_xyz, self.pcds_rgb, self.pcds_masks = None, None, None
@@ -105,14 +139,22 @@ class ClutterRemovalSim(object):
         indexes, pose_list, color_list = list(), list(), list()
         if self.scene == "pile":
             if from_save:
-                self.generate_pile_scene_from_save(index=index, pose_=pose_, color_=color_, table_height=table_height)
+                self.generate_pile_scene_from_save(
+                    index=index, pose_=pose_, color_=color_, table_height=table_height
+                )
             else:
-                indexes, pose_list, color_list = self.generate_pile_scene(object_count, table_height)
+                indexes, pose_list, color_list = self.generate_pile_scene(
+                    object_count, table_height
+                )
         elif self.scene == "packed":
             if from_save:
-                self.generate_packed_scene_from_save(index=index, pose_=pose_, color_=color_)
+                self.generate_packed_scene_from_save(
+                    index=index, pose_=pose_, color_=color_
+                )
             else:
-                indexes, pose_list, color_list = self.generate_packed_scene(object_count, table_height)
+                indexes, pose_list, color_list = self.generate_packed_scene(
+                    object_count, table_height
+                )
 
         else:
             raise ValueError("Invalid scene argument")
@@ -155,15 +197,17 @@ class ClutterRemovalSim(object):
             if self.rand:
                 rotation = Rotation.random(random_state=self.rng)
             else:
-                rotation = Rotation.from_matrix(np.array([[1, 0, 0],
-                                                          [0, 1, 0],
-                                                          [0, 0, 1]]))
+                rotation = Rotation.from_matrix(
+                    np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])
+                )
 
             xy = self.rng.uniform(1.0 / 3.0 * self.size, 2.0 / 3.0 * self.size, 2)
             scale = self.rng.uniform(0.8, 1.0)
             pose = Transform(rotation, np.r_[xy, table_height + 0.2], scale=scale)
 
-            _, color = self.world.load_urdf(urdf, pose, scale=self.global_scaling * scale, return_color=True)
+            _, color = self.world.load_urdf(
+                urdf, pose, scale=self.global_scaling * scale, return_color=True
+            )
 
             color_list.append(color)
             pose_list.append(pose)
@@ -174,7 +218,9 @@ class ClutterRemovalSim(object):
         self.remove_and_wait()
         return index, pose_list, color_list
 
-    def generate_pile_scene_from_save(self, index=None, pose_=None, color_=None, table_height=0.3):
+    def generate_pile_scene_from_save(
+        self, index=None, pose_=None, color_=None, table_height=0.3
+    ):
         """
         Generate the scene from the saved state
         """
@@ -185,7 +231,9 @@ class ClutterRemovalSim(object):
         urdfs = [self.object_urdfs[idx] for idx in index]
         for i, urdf in enumerate(urdfs):
             scale = pose_[i].scale
-            self.world.load_urdf(urdf, pose_[i], scale=self.global_scaling * scale, color=color_[i])
+            self.world.load_urdf(
+                urdf, pose_[i], scale=self.global_scaling * scale, color=color_[i]
+            )
 
             self.wait_for_objects_to_rest(timeout=2.0)
         self.world.p.removeBody(box.uid)
@@ -209,7 +257,9 @@ class ClutterRemovalSim(object):
             rotation = Rotation.from_rotvec(angle * np.r_[0.0, 0.0, 1.0])
             pose = Transform(rotation, np.r_[x, y, z])
             scale = self.rng.uniform(0.7, 0.8)
-            body, color = self.world.load_urdf(urdf, pose, scale=self.global_scaling * scale, return_color=True)
+            body, color = self.world.load_urdf(
+                urdf, pose, scale=self.global_scaling * scale, return_color=True
+            )
             lower, upper = self.world.p.getAABB(body.uid)
             z = table_height + 0.5 * (upper[2] - lower[2]) + 0.002
             final_pose = Transform(rotation, np.r_[x, y, z], scale=scale)
@@ -240,7 +290,9 @@ class ClutterRemovalSim(object):
             trans[2] = 1.0
             new_pose = Transform(pose.rotation, trans)
 
-            body = self.world.load_urdf(urdf, new_pose, scale=self.global_scaling * scale, color=color)
+            body = self.world.load_urdf(
+                urdf, new_pose, scale=self.global_scaling * scale, color=color
+            )
 
             body.set_pose(pose=pose)
             self.world.step()
@@ -266,14 +318,17 @@ class ClutterRemovalSim(object):
 
         """
         interval_size = self.random_rotations_limit / self.n_intervals
-        intervals = [(i * interval_size, (i + 1) * interval_size) for i in range(self.n_intervals)]
+        intervals = [
+            (i * interval_size, (i + 1) * interval_size)
+            for i in range(self.n_intervals)
+        ]
 
         rotation_list = [np.random.uniform(start, end) for start, end in intervals]
 
         return np.asarray(rotation_list)
 
     def rotation_matrix_from_vectors(self, vec1, vec2):
-        """ Find the rotation matrix that aligns vec1 to vec2
+        """Find the rotation matrix that aligns vec1 to vec2
         :param vec1: A 3d "source" vector
         :param vec2: A 3d "destination" vector
         :return mat: A transform matrix (3x3) which when applied to vec1, aligns it with vec2.
@@ -295,18 +350,14 @@ class ClutterRemovalSim(object):
                 else:
                     # y component is larger or equal, choose x axis for rotation
                     axis = np.array([1, 0, 0])
-                rotation_matrix = np.array([
-                    [-1, 0, 0],
-                    [0, -1, 0],
-                    [0, 0, 1]
-                ]) if np.allclose(axis, a) else np.array([
-                    [-1, 0, 0],
-                    [0, 1, 0],
-                    [0, 0, -1]
-                ])
+                rotation_matrix = (
+                    np.array([[-1, 0, 0], [0, -1, 0], [0, 0, 1]])
+                    if np.allclose(axis, a)
+                    else np.array([[-1, 0, 0], [0, 1, 0], [0, 0, -1]])
+                )
                 return Rotation.from_matrix(rotation_matrix)
         kmat = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
-        rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s ** 2))
+        rotation_matrix = np.eye(3) + kmat + kmat.dot(kmat) * ((1 - c) / (s**2))
         return Rotation.from_matrix(rotation_matrix)
 
     def sample_rotations_around_normal(self, normal, gripper_normal=(0, 1, 0)):
@@ -314,18 +365,23 @@ class ClutterRemovalSim(object):
             normal = normal.cpu().numpy()
 
         # Align the gripper direction to the normal
-        rotation_align_gripper_to_normal = self.rotation_matrix_from_vectors(gripper_normal, normal)
+        rotation_align_gripper_to_normal = self.rotation_matrix_from_vectors(
+            gripper_normal, normal
+        )
 
         # Generate a series of rotations around the Z axis
         angles_degrees = self._random_rotations()
 
-        rotations = [Rotation.from_rotvec(
-            normal * angle) * rotation_align_gripper_to_normal for angle in
-                     angles_degrees]
+        rotations = [
+            Rotation.from_rotvec(normal * angle) * rotation_align_gripper_to_normal
+            for angle in angles_degrees
+        ]
 
         return rotations, angles_degrees
 
-    def mask_random_actions(self, pcd, sample_strategy, m=20, n_intervals=None, z_thresh=0.051):
+    def mask_random_actions(
+        self, pcd, sample_strategy, m=20, n_intervals=None, z_thresh=0.051
+    ):
         if n_intervals is not None:
             self.n_intervals = n_intervals
 
@@ -347,7 +403,9 @@ class ClutterRemovalSim(object):
             normals_list.append(normal)
 
             # rotation_list, planar_rotation_list = self.sample_rotations_around_normal_with_reference(normal)
-            rotation_list, planar_rotation_list = self.sample_rotations_around_normal(normal)
+            rotation_list, planar_rotation_list = self.sample_rotations_around_normal(
+                normal
+            )
 
             actions_for_point = list()
             for rotation, planar_rotation in zip(rotation_list, planar_rotation_list):
@@ -356,9 +414,16 @@ class ClutterRemovalSim(object):
 
             actions_list.append(np.array(actions_for_point))
         # (m, n_intervals, 8), (m,3), (m,3)
-        return np.array(actions_list), np.array(points_list), np.array(normals_list), np.array(index_list)
+        return (
+            np.array(actions_list),
+            np.array(points_list),
+            np.array(normals_list),
+            np.array(index_list),
+        )
 
-    def mask_all_actions(self, pcd_points, pcd_normals, n_intervals=None, z_thresh=0.052):
+    def mask_all_actions(
+        self, pcd_points, pcd_normals, n_intervals=None, z_thresh=0.052
+    ):
         if n_intervals is not None:
             self.n_intervals = n_intervals
 
@@ -378,18 +443,37 @@ class ClutterRemovalSim(object):
             point = pcd_points[index]
             normal = normals_normalized[i]
 
-            rotation_list, rotation_degrees = self.sample_rotations_around_normal(normal)
+            rotation_list, rotation_degrees = self.sample_rotations_around_normal(
+                normal
+            )
 
-            actions_for_point = [torch.cat([point, torch.tensor([planar_rotation], device=device, requires_grad=False),
-                                            torch.tensor(rotation.as_quat(), device=device, requires_grad=False)])
-                                 for rotation, planar_rotation in zip(rotation_list, rotation_degrees)]
+            actions_for_point = [
+                torch.cat(
+                    [
+                        point,
+                        torch.tensor(
+                            [planar_rotation], device=device, requires_grad=False
+                        ),
+                        torch.tensor(
+                            rotation.as_quat(), device=device, requires_grad=False
+                        ),
+                    ]
+                )
+                for rotation, planar_rotation in zip(rotation_list, rotation_degrees)
+            ]
 
             actions_list.append(torch.stack(actions_for_point))
         # (m, n_intervals, 8), (m,3), (m,3)
-        return torch.stack(actions_list).to(device), pcd_points[indices].to(device), pcd_normals[indices].to(
-            device), indices
+        return (
+            torch.stack(actions_list).to(device),
+            pcd_points[indices].to(device),
+            pcd_normals[indices].to(device),
+            indices,
+        )
 
-    def mask_all_actions_batch(self, pcd_points, pcd_normals, n_intervals=None, z_thresh=0.052):
+    def mask_all_actions_batch(
+        self, pcd_points, pcd_normals, n_intervals=None, z_thresh=0.052
+    ):
         if n_intervals is not None:
             self.n_intervals = n_intervals
 
@@ -407,34 +491,55 @@ class ClutterRemovalSim(object):
 
         # Generate all rotations and planar rotations in a batch
         rotations, planar_rotations = zip(
-            *[self.sample_rotations_around_normal_batch(normal) for normal in normals_normalized])
+            *[
+                self.sample_rotations_around_normal_batch(normal)
+                for normal in normals_normalized
+            ]
+        )
 
         # Concatenate rotations and planar rotations for batch processing
-        rotations = [torch.tensor([rotation.as_quat() for rotation in rotation_set], device=device) for rotation_set in
-                     rotations]
+        rotations = [
+            torch.tensor(
+                [rotation.as_quat() for rotation in rotation_set], device=device
+            )
+            for rotation_set in rotations
+        ]
         planar_rotations = torch.tensor(planar_rotations, device=device)
 
         # Create actions for all points in batch
-        points_expanded = pcd_points[indices].unsqueeze(1).expand(-1, self.n_intervals, -1)
+        points_expanded = (
+            pcd_points[indices].unsqueeze(1).expand(-1, self.n_intervals, -1)
+        )
         planar_rotations_expanded = planar_rotations.unsqueeze(2).expand(-1, -1, 1)
         rotations_expanded = torch.stack(rotations).to(device)
 
-        actions_for_points = torch.cat([points_expanded, planar_rotations_expanded, rotations_expanded], dim=2)
+        actions_for_points = torch.cat(
+            [points_expanded, planar_rotations_expanded, rotations_expanded], dim=2
+        )
 
-        return actions_for_points, pcd_points[indices].to(device), pcd_normals[indices].to(device), indices
+        return (
+            actions_for_points,
+            pcd_points[indices].to(device),
+            pcd_normals[indices].to(device),
+            indices,
+        )
 
     def sample_rotations_around_normal_batch(self, normal, gripper_normal=(0, 1, 0)):
         if isinstance(normal, torch.Tensor):
             normal = normal.cpu().numpy()
 
         # Align the gripper direction to the normal
-        rotation_align_gripper_to_normal = self.rotation_matrix_from_vectors(gripper_normal, normal)
+        rotation_align_gripper_to_normal = self.rotation_matrix_from_vectors(
+            gripper_normal, normal
+        )
 
         # Generate a series of rotations around the Z axis
         angles_degrees = self._random_rotations()
 
-        rotations = [Rotation.from_rotvec(normal * angle) * rotation_align_gripper_to_normal for angle in
-                     angles_degrees]
+        rotations = [
+            Rotation.from_rotvec(normal * angle) * rotation_align_gripper_to_normal
+            for angle in angles_degrees
+        ]
 
         return rotations, angles_degrees
 
@@ -503,17 +608,21 @@ class ClutterRemovalSim(object):
 
         return np.asarray(vertices)
 
-    def calculate_rectangle_vertices_batch(self, length, width, height, tcp_batch, quat_batch):
+    def calculate_rectangle_vertices_batch(
+        self, length, width, height, tcp_batch, quat_batch
+    ):
         # Convert quaternion batch to rotation matrices
         rotation_matrices = Rotation.from_quat(quat_batch).as_matrix()
 
         # Define the local vectors for the rectangle vertices
-        vectors_local = np.array([
-            [+width / 2, +length / 2, height],
-            [-width / 2, +length / 2, height],
-            [-width / 2, -length / 2, height],
-            [+width / 2, -length / 2, height]
-        ])
+        vectors_local = np.array(
+            [
+                [+width / 2, +length / 2, height],
+                [-width / 2, +length / 2, height],
+                [-width / 2, -length / 2, height],
+                [+width / 2, -length / 2, height],
+            ]
+        )
 
         batch_size = tcp_batch.shape[0]
 
@@ -521,25 +630,38 @@ class ClutterRemovalSim(object):
         vectors_local_batch = np.tile(vectors_local, (batch_size, 1, 1))
 
         # Perform batch rotation and translation
-        rotated_vectors = np.einsum('bij,bvj->bvi', rotation_matrices, vectors_local_batch)
+        rotated_vectors = np.einsum(
+            "bij,bvj->bvi", rotation_matrices, vectors_local_batch
+        )
         vertices_batch = rotated_vectors + tcp_batch[:, np.newaxis, :]
 
         return vertices_batch
 
-    def decode_action_batch(self, actions, translation_offset=0.008, z_thresh=0.051, vertical_offset=0.007):
+    def decode_action_batch(
+        self, actions, translation_offset=0.008, z_thresh=0.051, vertical_offset=0.007
+    ):
         orig_positions = actions[:, :3]
         rots = actions[:, 3:7]
         normal_vectors = actions[:, 7:]
 
-        unit_normal_vectors = normal_vectors / np.linalg.norm(normal_vectors, axis=1, keepdims=True)
+        unit_normal_vectors = normal_vectors / np.linalg.norm(
+            normal_vectors, axis=1, keepdims=True
+        )
 
-        translation_distance = np.full((actions.shape[0], 1), self.gripper.max_opening_width / 2 - translation_offset)
+        translation_distance = np.full(
+            (actions.shape[0], 1),
+            self.gripper.max_opening_width / 2 - translation_offset,
+        )
         translation_vectors = -unit_normal_vectors * translation_distance
         positions_after_translation = orig_positions + translation_vectors
 
-        finger_positions = self.calculate_rectangle_vertices_batch(length=0.09, width=0.018, height=0.009,
-                                                                   tcp_batch=positions_after_translation,
-                                                                   quat_batch=rots)
+        finger_positions = self.calculate_rectangle_vertices_batch(
+            length=0.09,
+            width=0.018,
+            height=0.009,
+            tcp_batch=positions_after_translation,
+            quat_batch=rots,
+        )
 
         graspable_mask = np.all(finger_positions[:, :, 2] > z_thresh, axis=1)
 
@@ -567,7 +689,9 @@ class ClutterRemovalSim(object):
 
         return graspable_results, positions_after_translation, rots
 
-    def _decodeAction(self, action, translation_offset=0.008, vertical_offset=0.007, z_thresh=0.051):
+    def _decodeAction(
+        self, action, translation_offset=0.008, vertical_offset=0.007, z_thresh=0.051
+    ):
 
         orig_position, rot, normal_vector = action
 
@@ -577,9 +701,13 @@ class ClutterRemovalSim(object):
         translation_vector = -unit_normal_vector * translation_distance
         position_after_translation = orig_position + translation_vector
 
-        finger_positions = self.calculate_rectangle_vertices(length=0.09, width=0.018, height=0.009,
-                                                             tcp=position_after_translation,
-                                                             quat=rot)
+        finger_positions = self.calculate_rectangle_vertices(
+            length=0.09,
+            width=0.018,
+            height=0.009,
+            tcp=position_after_translation,
+            quat=rot,
+        )
 
         if np.all(finger_positions[:, 2] > z_thresh):
             return (1, position_after_translation, rot)
@@ -602,14 +730,16 @@ class ClutterRemovalSim(object):
 
         return (0, position_after_translation, rot)
 
-    def execute_grasp(self, action, remove=False, allow_contact=True, waitTime=0, z_thresh=0.052):
+    def execute_grasp(
+        self, action, remove=False, allow_contact=True, waitTime=0, z_thresh=0.052
+    ):
         graspable, pos, rot_q = self._decodeAction(action, z_thresh=z_thresh)
         grasped_object_ind = None
 
         if graspable == 0:
             self.gripper.holding_obj = None
             self.gripper.move_home()
-            result = Label.FAILURE, self.gripper.max_opening_width, 'pregrasp'
+            result = Label.FAILURE, self.gripper.max_opening_width, "pregrasp"
             return result, grasped_object_ind, graspable
 
         grasp_pose = Transform(Rotation.from_quat(rot_q), pos)
@@ -634,13 +764,13 @@ class ClutterRemovalSim(object):
         self.gripper.set_tcp(T_world_pregrasp)
         self.world.step()
         if self.gripper.detect_contact():
-            result = Label.FAILURE, self.gripper.max_opening_width, 'pregrasp'
+            result = Label.FAILURE, self.gripper.max_opening_width, "pregrasp"
             self.gripper.holding_obj = None
             self.gripper.move_home()
         else:
             self.gripper.move_tcp_xyz(T_world_grasp, abort_on_contact=False)
             if self.gripper.detect_contact() and not allow_contact:
-                result = Label.FAILURE, self.gripper.max_opening_width, 'grasp'
+                result = Label.FAILURE, self.gripper.max_opening_width, "grasp"
                 self.gripper.holding_obj = None
                 self.gripper.move_home()
             else:
@@ -648,12 +778,12 @@ class ClutterRemovalSim(object):
                 self.gripper.move_tcp_xyz(T_world_retreat, abort_on_contact=False)
                 self.gripper.holding_obj = self.gripper.getPickedObj()
                 if self.gripper.holding_obj:
-                    result = Label.SUCCESS, self.gripper.read(), 'success'
+                    result = Label.SUCCESS, self.gripper.read(), "success"
                     if remove:
                         contacts = self.world.get_contacts(self.gripper.body)
                         self.world.remove_body(contacts[0].bodyB)
                 else:
-                    result = Label.FAILURE, self.gripper.max_opening_width, 'after'
+                    result = Label.FAILURE, self.gripper.max_opening_width, "after"
                 self.gripper.move_home()
                 self.world.step()
 
@@ -687,25 +817,25 @@ class ClutterRemovalSim(object):
         self.gripper.set_tcp(T_world_pregrasp)
         self.world.step()
         if self.gripper.detect_contact():
-            result = Label.FAILURE, self.gripper.max_opening_width, 'pregrasp'
+            result = Label.FAILURE, self.gripper.max_opening_width, "pregrasp"
             self.gripper.holding_obj = None
             self.gripper.move_home()
         else:
             self.gripper.move_tcp_xyz(T_world_grasp, abort_on_contact=False)
             if self.gripper.detect_contact() and not allow_contact:
-                result = Label.FAILURE, self.gripper.max_opening_width, 'grasp'
+                result = Label.FAILURE, self.gripper.max_opening_width, "grasp"
                 self.gripper.holding_obj = None
                 self.gripper.move_home()
             else:
                 self.gripper.move(0.0)
                 self.gripper.move_tcp_xyz(T_world_retreat, abort_on_contact=False)
                 if self.check_success(self.gripper):
-                    result = Label.SUCCESS, self.gripper.read(), 'success'
+                    result = Label.SUCCESS, self.gripper.read(), "success"
                     if remove:
                         contacts = self.world.get_contacts(self.gripper.body)
                         self.world.remove_body(contacts[0].bodyB)
                 else:
-                    result = Label.FAILURE, self.gripper.max_opening_width, 'after'
+                    result = Label.FAILURE, self.gripper.max_opening_width, "after"
                 self.gripper.move_home()
                 self.world.step()
         self.wait_for_objects_to_rest(waitTime)
@@ -733,41 +863,42 @@ class ClutterRemovalSim(object):
         return False, grasp_obj_id
 
     def getSingleViewObservation(self, n):
-        '''get raw inbound pcds and imgs,
-           the pcds have lots zero values, if you need filter later,
-           please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]'''
-        self.colormaps, self.heightmaps, self.segmaps = self.camera.render_camera(self.cams_config[n])
-        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = utils_3d.get_inbound_imgs_and_pcd(
-            self.colormaps,
-            self.heightmaps,
-            self.cams_config[n],
-            self.workspace
+        """get raw inbound pcds and imgs,
+        the pcds have lots zero values, if you need filter later,
+        please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]"""
+        self.colormaps, self.heightmaps, self.segmaps = self.camera.render_camera(
+            self.cams_config[n]
+        )
+        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = (
+            utils_3d.get_inbound_imgs_and_pcd(
+                self.colormaps, self.heightmaps, self.cams_config[n], self.workspace
+            )
         )
         self.non_zero_indices = ~np.all(self.pcds_xyz == 0, axis=1)
 
     def getRandomViewObservation(self, config):
-        '''get raw inbound pcds and imgs,
-           the pcds have lots zero values, if you need filter later,
-           please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]'''
-        self.colormaps, self.heightmaps, self.segmaps = self.camera.render_camera(config)
-        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = utils_3d.get_inbound_imgs_and_pcd(
-            self.colormaps,
-            self.heightmaps,
-            config,
-            self.workspace
+        """get raw inbound pcds and imgs,
+        the pcds have lots zero values, if you need filter later,
+        please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]"""
+        self.colormaps, self.heightmaps, self.segmaps = self.camera.render_camera(
+            config
+        )
+        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = (
+            utils_3d.get_inbound_imgs_and_pcd(
+                self.colormaps, self.heightmaps, config, self.workspace
+            )
         )
         self.non_zero_indices = ~np.all(self.pcds_xyz == 0, axis=1)
 
     def getRandomViewObservation_fast(self, config):
-        '''get raw inbound pcds,
-           the pcds have lots zero values, if you need filter later,
-           please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]'''
+        """get raw inbound pcds,
+        the pcds have lots zero values, if you need filter later,
+        please use self.pcds_rgb = self.pcds_rgb[self.non_zero_indices]"""
         _, self.heightmaps, __ = self.camera.render_camera(config)
-        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = utils_3d.get_inbound_imgs_and_pcd(
-            self.colormaps,
-            self.heightmaps,
-            config,
-            self.workspace
+        self.pcds_xyz, self.pcds_rgb, self.colormaps, self.heightmaps = (
+            utils_3d.get_inbound_imgs_and_pcd(
+                self.colormaps, self.heightmaps, config, self.workspace
+            )
         )
         self.non_zero_indices = ~np.all(self.pcds_xyz == 0, axis=1)
 
@@ -779,21 +910,32 @@ class ClutterRemovalSim(object):
         for i in range(len(self.colormaps)):
             masks_origin = self.mask_generator.generate(self.colormaps[i])
             if masks_origin is not None:
-                masks_filtered = filter_masks(masks_origin, self.pcds_xyz, 0.1,
-                                              bound_ratio=self.bound_radio)
+                masks_filtered = filter_masks(
+                    masks_origin, self.pcds_xyz, 0.1, bound_ratio=self.bound_radio
+                )
                 if len(masks_filtered) > 0:
                     masks_rgb = get_mask_rgb(masks_filtered)
                 else:
                     masks_rgb = np.full(
-                        (masks_origin[0]['segmentation'].shape[0], masks_origin[0]['segmentation'].shape[1], 3),
+                        (
+                            masks_origin[0]["segmentation"].shape[0],
+                            masks_origin[0]["segmentation"].shape[1],
+                            3,
+                        ),
                         200,
-                        dtype=np.uint8)
+                        dtype=np.uint8,
+                    )
             else:
                 masks_filtered = []
                 masks_rgb = masks_rgb = np.full(
-                    (masks_origin[0]['segmentation'].shape[0], masks_origin[0]['segmentation'].shape[1], 3),
+                    (
+                        masks_origin[0]["segmentation"].shape[0],
+                        masks_origin[0]["segmentation"].shape[1],
+                        3,
+                    ),
                     200,
-                    dtype=np.uint8)
+                    dtype=np.uint8,
+                )
             self.maskmaps += (masks_filtered,)
             self.maskrgbmaps += (masks_rgb,)
 
@@ -806,7 +948,9 @@ class Gripper(object):
 
     def __init__(self, world, offset=0.0625):
         self.world = world
-        self.urdf_path = Path(f"{os.path.abspath(os.path.dirname(__file__))}/data_robot/urdfs/panda/hand.urdf")
+        self.urdf_path = Path(
+            f"{os.path.abspath(os.path.dirname(__file__))}/data_robot/urdfs/panda/hand.urdf"
+        )
 
         self.max_opening_width = 0.08
         self.finger_depth = 0.05
@@ -816,10 +960,18 @@ class Gripper(object):
 
         self.T_body_tcp = Transform(Rotation.identity(), [0.0, 0.0, offset])
         self.T_tcp_body = self.T_body_tcp.inverse()
-        self.home_pose = Transform(Rotation.from_euler('x', 180, degrees=True), self.position)
-        self.body = self.world.load_urdf(self.urdf_path, self.home_pose * self.T_tcp_body, scale=1.0, env_obj=True)
-        self.world.p.changeDynamics(self.body.uid, 0, lateralFriction=0.75, spinningFriction=0.05)
-        self.world.p.changeDynamics(self.body.uid, 1, lateralFriction=0.75, spinningFriction=0.05)
+        self.home_pose = Transform(
+            Rotation.from_euler("x", 180, degrees=True), self.position
+        )
+        self.body = self.world.load_urdf(
+            self.urdf_path, self.home_pose * self.T_tcp_body, scale=1.0, env_obj=True
+        )
+        self.world.p.changeDynamics(
+            self.body.uid, 0, lateralFriction=0.75, spinningFriction=0.05
+        )
+        self.world.p.changeDynamics(
+            self.body.uid, 1, lateralFriction=0.75, spinningFriction=0.05
+        )
 
         # sets the position of the COM, not URDF link
         self.constraint = self.world.add_constraint(
@@ -830,7 +982,7 @@ class Gripper(object):
             pybullet.JOINT_FIXED,
             [0.0, 0.0, 0.0],
             Transform.identity(),
-            self.home_pose * self.T_tcp_body
+            self.home_pose * self.T_tcp_body,
         )
 
         # constraint to keep fingers centered
@@ -910,10 +1062,12 @@ class Gripper(object):
         for body in self.world.bodies.values():
             if body.uid == self.body.uid:
                 continue
-            contact_points_left = self.world.p.getContactPoints(self.body.uid, body.uid,
-                                                                self.body.links["panda_leftfinger"].link_index)
-            contact_points_right = self.world.p.getContactPoints(self.body.uid, body.uid,
-                                                                 self.body.links["panda_rightfinger"].link_index)
+            contact_points_left = self.world.p.getContactPoints(
+                self.body.uid, body.uid, self.body.links["panda_leftfinger"].link_index
+            )
+            contact_points_right = self.world.p.getContactPoints(
+                self.body.uid, body.uid, self.body.links["panda_rightfinger"].link_index
+            )
             if contact_points_left and contact_points_right:
                 return body
 
@@ -936,7 +1090,9 @@ class Gripper(object):
         n_steps = max(int(np.linalg.norm(pos_diff) / eef_step1), 10)
         dist_step = pos_diff / n_steps
         dur_step = np.linalg.norm(dist_step) / vel1
-        key_rots = np.stack((T_world_body.rotation.as_quat(), target.rotation.as_quat()), axis=0)
+        key_rots = np.stack(
+            (T_world_body.rotation.as_quat(), target.rotation.as_quat()), axis=0
+        )
         key_rots = Rotation.from_quat(key_rots)
         slerp = Slerp([0.0, 1.0], key_rots)
         times = np.linspace(0, 1, n_steps)
@@ -959,6 +1115,6 @@ class Gripper(object):
     def move_gripper_top_down(self):
         current_pose = self.body.get_pose()
         pos = current_pose.translation + 0.1
-        flip = Rotation.from_euler('y', np.pi)
+        flip = Rotation.from_euler("y", np.pi)
         target_ori = Rotation.identity() * flip
         self.move_tcp_pose(Transform(rotation=target_ori, translation=pos), abs=True)

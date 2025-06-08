@@ -8,23 +8,28 @@ from utils.transform import Rotation, Transform
 from utils.utility import get_gripper_points_mask
 import argparse
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--scene', type=str, default='pile')
-    parser.add_argument('--camera', type=str, default='single')
-    parser.add_argument('--save_path', type=str,
-                        default=Path(__file__).resolve().parent / 'collected_data/se3_filtered')
+    parser.add_argument("--scene", type=str, default="pile")
+    parser.add_argument("--camera", type=str, default="single")
+    parser.add_argument(
+        "--save_path",
+        type=str,
+        default=Path(__file__).resolve().parent / "collected_data/se3_filtered",
+    )
 
-    parser.add_argument('--read_path', type=str,
-                        default=Path(__file__).resolve().parent / 'collected_data/se3_origin')
+    parser.add_argument(
+        "--read_path",
+        type=str,
+        default=Path(__file__).resolve().parent / "collected_data/se3_origin",
+    )
 
     args = parser.parse_args()
 
     scene_name = args.scene
-    read_path = args.read_path / f'{scene_name}_{args.camera}'
-    save_path = args.save_path / f'{scene_name}_{args.camera}'
-    files = sorted([f for f in os.listdir(read_path) if f.endswith('.pkl')])
-
+    read_path = args.read_path / f"{scene_name}_{args.camera}"
+    save_path = args.save_path / f"{scene_name}_{args.camera}"
+    files = sorted([f for f in os.listdir(read_path) if f.endswith(".pkl")])
 
     def calculate_rectangle_vertices(length, width, height, tcp, quat):
         rotation_matrix = Rotation.from_quat(quat).as_matrix()
@@ -43,7 +48,6 @@ if __name__ == '__main__':
 
         return np.asarray(vertices)
 
-
     vertical_offset = 0.007
     translation_offset = 0.008
     z_thresh = 0.052
@@ -61,11 +65,11 @@ if __name__ == '__main__':
     for itr, file in enumerate(files):
 
         # load the file (each scene)
-        with open(os.path.join(read_path, file), 'rb') as f:
+        with open(os.path.join(read_path, file), "rb") as f:
             scene = pickle.load(f)
 
-        success_flag_list = scene.get('success')
-        action_all_masks = scene.get('grasping_pose')
+        success_flag_list = scene.get("success")
+        action_all_masks = scene.get("grasping_pose")
 
         success_array = list()
         grasp_indices_array = list()
@@ -75,11 +79,12 @@ if __name__ == '__main__':
         for m in range(len(action_all_masks)):
             # for each mask, we need the success flag and its corresponding grasping pose
             success_flag = success_flag_list[m]
-            new_success_flag = np.zeros((success_flag.shape[0], success_flag.shape[1], success_flag.shape[2])).astype(
-                np.float32)
+            new_success_flag = np.zeros(
+                (success_flag.shape[0], success_flag.shape[1], success_flag.shape[2])
+            ).astype(np.float32)
 
-            actions = action_all_masks[m]['actions']
-            normals = action_all_masks[m]['normals']
+            actions = action_all_masks[m]["actions"]
+            normals = action_all_masks[m]["normals"]
 
             success_list = list()
 
@@ -93,21 +98,29 @@ if __name__ == '__main__':
                     pos = action[:3]
                     rot = action[-4:]
 
-                    gripper_angle_mask = get_gripper_angle_mask(Rotation.from_quat(rot), threshold=75)
+                    gripper_angle_mask = get_gripper_angle_mask(
+                        Rotation.from_quat(rot), threshold=75
+                    )
 
                     if gripper_angle_mask:
 
                         orig_position, rot, normal_vector = pos, rot, normal
 
-                        unit_normal_vector = normal_vector / np.linalg.norm(normal_vector)
+                        unit_normal_vector = normal_vector / np.linalg.norm(
+                            normal_vector
+                        )
 
                         translation_distance = 0.04 - translation_offset
                         translation_vector = -unit_normal_vector * translation_distance
                         position_after_translation = orig_position + translation_vector
 
-                        finger_positions = calculate_rectangle_vertices(length=0.09, width=0.018, height=0.009,
-                                                                        tcp=position_after_translation,
-                                                                        quat=rot)
+                        finger_positions = calculate_rectangle_vertices(
+                            length=0.09,
+                            width=0.018,
+                            height=0.009,
+                            tcp=position_after_translation,
+                            quat=rot,
+                        )
 
                         if np.all(finger_positions[:, 2] > z_thresh):
                             continue
@@ -117,10 +130,16 @@ if __name__ == '__main__':
 
                         cur_vertical_offset = -5e-4
                         while cur_vertical_offset >= -vertical_offset:
-                            z_translation_vector = global_z_direction * cur_vertical_offset
-                            final_position = position_after_translation + z_translation_vector
+                            z_translation_vector = (
+                                global_z_direction * cur_vertical_offset
+                            )
+                            final_position = (
+                                position_after_translation + z_translation_vector
+                            )
 
-                            final_finger_positions = finger_positions + z_translation_vector
+                            final_finger_positions = (
+                                finger_positions + z_translation_vector
+                            )
 
                             final_z = np.min(final_finger_positions[:, 2])
 
@@ -130,9 +149,12 @@ if __name__ == '__main__':
 
                         if cur_vertical_offset < -vertical_offset:
                             success_arr[k] = -1
-                        trans_matrix = Transform(Rotation.from_quat(rot),
-                                                 position_after_translation).as_matrix()
-                        z_mask = get_gripper_points_mask(trans_matrix, threshold=z_thresh)
+                        trans_matrix = Transform(
+                            Rotation.from_quat(rot), position_after_translation
+                        ).as_matrix()
+                        z_mask = get_gripper_points_mask(
+                            trans_matrix, threshold=z_thresh
+                        )
                         if not z_mask:
                             success_arr[k] = -1
 
@@ -148,16 +170,31 @@ if __name__ == '__main__':
                 unreachable_grasp_ori += np.sum(success_flag[i] == -1)
             new_success_flag_list.append(new_success_flag)
 
-        scene['success'] = new_success_flag_list
+        scene["success"] = new_success_flag_list
         if not os.path.exists(save_path):
             os.makedirs(save_path)
-        filename = os.path.join(save_path, f'{scene_name}_{(itr):05}.pkl')
-        with open(filename, 'wb') as f:
+        filename = os.path.join(save_path, f"{scene_name}_{(itr):05}.pkl")
+        with open(filename, "wb") as f:
             pickle.dump(scene, f)
-        print('Total grasp:', total_grasp, 'Success grasp:', success_grasp, 'Failure grasp:', failure_grasp,
-              'Unreachable grasp:', unreachable_grasp)
-        print('Total grasp ori:', total_grasp, 'Success grasp ori:', success_grasp_ori, 'Failure grasp ori:',
-              failure_grasp_ori,
-              'Unreachable grasp ori:', unreachable_grasp_ori)
+        print(
+            "Total grasp:",
+            total_grasp,
+            "Success grasp:",
+            success_grasp,
+            "Failure grasp:",
+            failure_grasp,
+            "Unreachable grasp:",
+            unreachable_grasp,
+        )
+        print(
+            "Total grasp ori:",
+            total_grasp,
+            "Success grasp ori:",
+            success_grasp_ori,
+            "Failure grasp ori:",
+            failure_grasp_ori,
+            "Unreachable grasp ori:",
+            unreachable_grasp_ori,
+        )
 
     print(c)

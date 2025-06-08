@@ -19,9 +19,19 @@ action_all_masks.append(action_info)
 
 
 class orbitgrasp_dataset(Dataset):
-    def __init__(self, path, extra_radius=0.035, lmax=3, max_allowed_points=800,
-                 min_allowed_points=700, min_radius=-1e-6, augment=True, load_harmonics=False, augment_ratio=0.95,
-                 load_harmony_path='grasp_harmonics_l3_test_single.pt'):
+    def __init__(
+        self,
+        path,
+        extra_radius=0.035,
+        lmax=3,
+        max_allowed_points=800,
+        min_allowed_points=700,
+        min_radius=-1e-6,
+        augment=True,
+        load_harmonics=False,
+        augment_ratio=0.95,
+        load_harmony_path="grasp_harmonics_l3_test_single.pt",
+    ):
         # self.data: training data -> FeaturedPoints
         # self.scenes_grasping_list: labels -> for each scene
         super().__init__()
@@ -41,19 +51,19 @@ class orbitgrasp_dataset(Dataset):
                 grasp_harmonics = torch.load(load_harmony_path)
                 self.augmentor = None
             else:
-                self.augmentor = GraspAugmentation(lmax=lmax, augment_ratio=0.)
-        files = sorted([f for f in os.listdir(path) if f.endswith('.pkl')])
+                self.augmentor = GraspAugmentation(lmax=lmax, augment_ratio=0.0)
+        files = sorted([f for f in os.listdir(path) if f.endswith(".pkl")])
 
         for itr, file in enumerate(files):
 
             # load the file (each scene)
-            with open(os.path.join(path, file), 'rb') as f:
+            with open(os.path.join(path, file), "rb") as f:
                 scene = pickle.load(f)
-            pcd_points = torch.from_numpy(scene.get('pcd_points')).float()
-            pcd_normals = torch.from_numpy(scene.get('pcd_normals')).float()
-            down_mask_list = scene.get('all_masks')
-            success_flag_list = scene.get('success')
-            all_poses_info_list = scene.get('grasping_pose')
+            pcd_points = torch.from_numpy(scene.get("pcd_points")).float()
+            pcd_normals = torch.from_numpy(scene.get("pcd_normals")).float()
+            down_mask_list = scene.get("all_masks")
+            success_flag_list = scene.get("success")
+            all_poses_info_list = scene.get("grasping_pose")
 
             if load_harmonics and not augment:
                 scene_harmonics = grasp_harmonics[itr]
@@ -73,11 +83,16 @@ class orbitgrasp_dataset(Dataset):
                 itr = 0
                 while True:
                     mask_radius = distances.max() + temp_radius
-                    all_distances_to_center = torch.norm(pcd_points - mask_center, dim=1)
+                    all_distances_to_center = torch.norm(
+                        pcd_points - mask_center, dim=1
+                    )
                     sphere_mask = all_distances_to_center <= mask_radius
                     sphere_points = pcd_points[sphere_mask]
 
-                    if sphere_points.shape[0] <= max_allowed_points and sphere_points.shape[0] >= min_allowed_points:
+                    if (
+                        sphere_points.shape[0] <= max_allowed_points
+                        and sphere_points.shape[0] >= min_allowed_points
+                    ):
                         break
                     elif sphere_points.shape[0] > max_allowed_points:
                         temp_radius -= 0.005
@@ -91,15 +106,20 @@ class orbitgrasp_dataset(Dataset):
                     if itr >= 50:
                         break
 
-                grasp_indices = torch.from_numpy(all_poses_info_list[flag]['grasp_indices'])
-                grasp_poses = torch.from_numpy(all_poses_info_list[flag]['actions']).float()
+                grasp_indices = torch.from_numpy(
+                    all_poses_info_list[flag]["grasp_indices"]
+                )
+                grasp_poses = torch.from_numpy(
+                    all_poses_info_list[flag]["actions"]
+                ).float()
 
                 success_flag = np.squeeze(success_flag_list[flag])  # [P, I]
                 # Map pcd_points indices to local indices within the sphere
                 local_indices = torch.arange(pcd_points.shape[0])[sphere_mask]
                 # get the local indices in the sphere points
                 sphere_indices, reorderded_indices = torch.where(
-                    local_indices.unsqueeze(1) == grasp_indices.unsqueeze(0))
+                    local_indices.unsqueeze(1) == grasp_indices.unsqueeze(0)
+                )
                 reorder_success_flag = success_flag[reorderded_indices]
                 reordered_grasp_poses = grasp_poses[reorderded_indices]
 
@@ -107,8 +127,9 @@ class orbitgrasp_dataset(Dataset):
                     mask_harmonics = scene_harmonics[flag]
                     reorder_mask_harmonics = mask_harmonics[reorderded_indices]
 
-                if sphere_points.shape[0] > (max_allowed_points + 100) or sphere_points.shape[0] < (
-                        min_allowed_points - 100):
+                if sphere_points.shape[0] > (
+                    max_allowed_points + 100
+                ) or sphere_points.shape[0] < (min_allowed_points - 100):
                     flag += 1
                     continue
                 # visualize the sphere points
@@ -119,7 +140,8 @@ class orbitgrasp_dataset(Dataset):
                 feature_points = FeaturedPoints(
                     x=sphere_points,
                     n=pcd_normals[sphere_mask],
-                    b=torch.ones(sphere_points.shape[0], dtype=torch.long))
+                    b=torch.ones(sphere_points.shape[0], dtype=torch.long),
+                )
 
                 feature_points = self.normalize(feature_points)
 
@@ -130,9 +152,14 @@ class orbitgrasp_dataset(Dataset):
                 if scene_harmonics:
                     self.harmonics_list.append(reorder_mask_harmonics)
                 flag += 1
-        print('Data is loaded from: ', path,
-              'Number of scenes: ', len(files),
-              'Number of masks: ', len(self.data))
+        print(
+            "Data is loaded from: ",
+            path,
+            "Number of scenes: ",
+            len(files),
+            "Number of masks: ",
+            len(self.data),
+        )
 
     def __len__(self):
         return len(self.data)
@@ -145,11 +172,17 @@ class orbitgrasp_dataset(Dataset):
             success_list = self.success_list[idx]
             grasp_poses = self.grasp_poses_list[idx]
             if self.augmentor:
-                return self.augmentor(data, scene_grasping_indices, success_list, grasp_poses)
+                return self.augmentor(
+                    data, scene_grasping_indices, success_list, grasp_poses
+                )
             return data, scene_grasping_indices, success_list, self.harmonics_list[idx]
         else:
-            return self.aug_data[idx], self.aug_grasping_indices[idx], self.aug_success_list[idx], self.aug_harmonics[
-                idx]
+            return (
+                self.aug_data[idx],
+                self.aug_grasping_indices[idx],
+                self.aug_success_list[idx],
+                self.aug_harmonics[idx],
+            )
 
     def normalize(self, data: FeaturedPoints):
         pos = data.x
@@ -169,8 +202,12 @@ class orbitgrasp_dataset(Dataset):
             success_list = self.success_list[idx]
             grasp_poses = self.grasp_poses_list[idx]
 
-            augmented_data, augmented_scene_grasping_indices, augmented_success_list, augmented_harmonics = (
-                self.augmentor(data, scene_grasping_indices, success_list, grasp_poses))
+            (
+                augmented_data,
+                augmented_scene_grasping_indices,
+                augmented_success_list,
+                augmented_harmonics,
+            ) = self.augmentor(data, scene_grasping_indices, success_list, grasp_poses)
             self.aug_data.append(augmented_data)
             self.aug_grasping_indices.append(augmented_scene_grasping_indices)
             self.aug_success_list.append(augmented_success_list)
@@ -190,18 +227,26 @@ class GraspAugmentation:
 
     def __call__(self, data, scene_grasping_indices, success_list, grasp_poses):
         if np.random.rand() > self.augment_ratio:
-            return self.process_without_rotation(data, scene_grasping_indices, success_list, grasp_poses)
+            return self.process_without_rotation(
+                data, scene_grasping_indices, success_list, grasp_poses
+            )
         else:
-            return self.process_with_rotation(data, scene_grasping_indices, success_list, grasp_poses)
+            return self.process_with_rotation(
+                data, scene_grasping_indices, success_list, grasp_poses
+            )
 
-    def process_without_rotation(self, data, scene_grasping_indices, success_list, grasp_poses):
+    def process_without_rotation(
+        self, data, scene_grasping_indices, success_list, grasp_poses
+    ):
 
         grasp_quats = grasp_poses[:, :, -4:]
         grasp_z = self.quaternion_to_z_direction(grasp_quats)
         mask_harmonics = self.compute_spherical_harmonics(grasp_z)
         return data, scene_grasping_indices, success_list, mask_harmonics
 
-    def process_with_rotation(self, data, scene_grasping_indices, success_list, grasp_poses):
+    def process_with_rotation(
+        self, data, scene_grasping_indices, success_list, grasp_poses
+    ):
 
         # x_angle = np.random.uniform(*self.x_angle_range)
         # y_angle = np.random.uniform(*self.y_angle_range)
@@ -215,7 +260,7 @@ class GraspAugmentation:
         # here we only rotate around z-axis (se2 augmentation)
         angle = np.random.uniform(*self.z_angle_range)
         angle_rad = np.radians(angle)
-        rotation = Rotation.from_euler('z', angle_rad)
+        rotation = Rotation.from_euler("z", angle_rad)
 
         # Rotate points and normals
         rotated_data = self.rotate_data(data, rotation)
@@ -225,7 +270,12 @@ class GraspAugmentation:
         rotated_z = self.quaternion_to_z_direction(rotated_grasp_poses[:, :, :])
         rotated_mask_harmonics = self.compute_spherical_harmonics(rotated_z)
 
-        return rotated_data, scene_grasping_indices, success_list, rotated_mask_harmonics
+        return (
+            rotated_data,
+            scene_grasping_indices,
+            success_list,
+            rotated_mask_harmonics,
+        )
 
     def rotate_data(self, data, rotation):
 
@@ -247,13 +297,15 @@ class GraspAugmentation:
         rotations = Rotation.from_quat(quaternions.reshape(-1, 4))
         z_axis = np.array([0, 0, -1])
         z_rotated = rotations.apply(z_axis)
-        z_rotated_tensor = torch.from_numpy(z_rotated).view(quaternions.shape[0], quaternions.shape[1], 3)
+        z_rotated_tensor = torch.from_numpy(z_rotated).view(
+            quaternions.shape[0], quaternions.shape[1], 3
+        )
 
         return z_rotated_tensor.detach()
 
     def vector_to_spherical(self, vectors):
 
-        r = torch.sqrt(torch.sum(vectors ** 2, dim=-1))
+        r = torch.sqrt(torch.sum(vectors**2, dim=-1))
 
         theta = torch.acos(vectors[..., 1] / r)
         phi = torch.atan2(vectors[..., 0], vectors[..., 2])
@@ -263,7 +315,9 @@ class GraspAugmentation:
         r, theta, phi = self.vector_to_spherical(vectors)
         harmonics_list = []
         for l in range(self.lmax + 1):
-            harmonics = spherical_harmonics_alpha_beta(l, phi, theta, normalization='component')
+            harmonics = spherical_harmonics_alpha_beta(
+                l, phi, theta, normalization="component"
+            )
             harmonics_list.append(harmonics)
         harmonics = torch.cat(harmonics_list, dim=-1)
         return harmonics.detach()

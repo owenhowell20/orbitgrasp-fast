@@ -9,8 +9,8 @@ import tqdm
 import yaml
 from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), './')))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "./")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../")))
 
 from se3_grasper_bce import OrbitGrasper
 from utils.torch_utils import set_seed, write_test, write_log
@@ -24,42 +24,55 @@ from utils.utils_3d import FarthestSampler
 from torch_geometric.nn import radius
 
 
-def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_points=800,
-                      min_radius=-1e-6, max_radius=0.15, lmax=3, config_file=None):
+def grasp_test_random(
+    initial_radius=0.035,
+    max_allowed_points=900,
+    min_allowed_points=800,
+    min_radius=-1e-6,
+    max_radius=0.15,
+    lmax=3,
+    config_file=None,
+):
     base_path = Path(__file__).resolve().parent
-    load_name = find_checkpoint(base_path / config_file["test"]["root_dir"],
-                                config_file['test']['load_epoch'])
-    orbit_grasper = OrbitGrasper(device=config_file['orbit_grasper']['device'],
-                                 load=config_file["test"]["load_epoch"],
-                                 param_dir=base_path / config_file["test"]["root_dir"],
-                                 num_channel=config_file['orbit_grasper']['num_channel'],
-                                 lmax=3, mmax=2,
-                                 load_name=load_name,
-                                 training_config=config_file)
+    load_name = find_checkpoint(
+        base_path / config_file["test"]["root_dir"], config_file["test"]["load_epoch"]
+    )
+    orbit_grasper = OrbitGrasper(
+        device=config_file["orbit_grasper"]["device"],
+        load=config_file["test"]["load_epoch"],
+        param_dir=base_path / config_file["test"]["root_dir"],
+        num_channel=config_file["orbit_grasper"]["num_channel"],
+        lmax=3,
+        mmax=2,
+        load_name=load_name,
+        training_config=config_file,
+    )
 
-    scene = config_file['test']['scene']
-    object_set = 'test'
-    GUI = config_file['test']['GUI']
+    scene = config_file["test"]["scene"]
+    object_set = "test"
+    GUI = config_file["test"]["GUI"]
 
     record = list()
     success_list = list()
     declutter_list = list()
     point_sampler = FarthestSampler()
 
-    for RUN in range(config_file['test']['RUN_TIMES']):
+    for RUN in range(config_file["test"]["RUN_TIMES"]):
         success_rate = 0
         declutter_rate = 0
         declutter_rate_wo_sam = 0
-        num_rounds = config_file['test']['NUM_ROUNDS']
+        num_rounds = config_file["test"]["NUM_ROUNDS"]
         silence = False
         cnt = 0
         success = 0
         total_objs = 0
         grasped_objs = 0
         remain_objs = 0
-        set_seed(RUN + config_file['seed'])
+        set_seed(RUN + config_file["seed"])
 
-        sim = ClutterRemovalSim(scene, object_set, rand=True, gui=GUI, seed=RUN + config_file['seed'])
+        sim = ClutterRemovalSim(
+            scene, object_set, rand=True, gui=GUI, seed=RUN + config_file["seed"]
+        )
 
         # control the gui speed
         sim.world.sleep = 0.001
@@ -82,19 +95,31 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 for j, colormap in enumerate(sim.colormaps):
                     start_idx = j * length
                     end_idx = (j + 1) * length
-                    pcd_xyz = sim.pcds_xyz[start_idx:end_idx][sim.non_zero_indices[start_idx:end_idx]]
+                    pcd_xyz = sim.pcds_xyz[start_idx:end_idx][
+                        sim.non_zero_indices[start_idx:end_idx]
+                    ]
                     pcd = o3d.geometry.PointCloud()
                     pcd.points = o3d.utility.Vector3dVector(pcd_xyz)
-                    if config_file['test']['add_noise']:
+                    if config_file["test"]["add_noise"]:
                         vertices = np.asarray(pcd.points)
                         # add gaussian noise 95% confident interval (-1.96,1.96)
-                        vertices = vertices + np.random.normal(loc=0.0, scale=0.0005, size=(len(vertices), 3))
+                        vertices = vertices + np.random.normal(
+                            loc=0.0, scale=0.0005, size=(len(vertices), 3)
+                        )
                         pcd.points = o3d.utility.Vector3dVector(vertices)
-                    pcd, ind_1 = pcd.remove_statistical_outlier(nb_neighbors=30, std_ratio=3.0)
+                    pcd, ind_1 = pcd.remove_statistical_outlier(
+                        nb_neighbors=30, std_ratio=3.0
+                    )
                     pcd, ind_2 = pcd.remove_radius_outlier(nb_points=30, radius=0.03)
-                    pcd.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.04, max_nn=30))
+                    pcd.estimate_normals(
+                        search_param=o3d.geometry.KDTreeSearchParamHybrid(
+                            radius=0.04, max_nn=30
+                        )
+                    )
                     pcd.orient_normals_consistent_tangent_plane(30)
-                    pcd.orient_normals_towards_camera_location(camera_location=RealSenseD415.CONFIG[j]['position'])
+                    pcd.orient_normals_towards_camera_location(
+                        camera_location=RealSenseD415.CONFIG[j]["position"]
+                    )
                     pcds_all.append(pcd)
                     index_list.append([ind_1, ind_2])
 
@@ -107,37 +132,57 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
 
                 down_pcd = voxel_down_sample(combined_pcd, voxel_size=0.0055)
 
-                down_pcd_points = torch.from_numpy(np.asarray(down_pcd.points)).float().to(
-                    config_file['orbit_grasper']['device']).detach()
-                down_pcd_normals = torch.from_numpy(np.asarray(down_pcd.normals)).float().to(
-                    config_file['orbit_grasper']['device']).detach()
+                down_pcd_points = (
+                    torch.from_numpy(np.asarray(down_pcd.points))
+                    .float()
+                    .to(config_file["orbit_grasper"]["device"])
+                    .detach()
+                )
+                down_pcd_normals = (
+                    torch.from_numpy(np.asarray(down_pcd.normals))
+                    .float()
+                    .to(config_file["orbit_grasper"]["device"])
+                    .detach()
+                )
 
                 data_list = list()
                 grasping_indices_list = list()
                 sphere_indices_list = list()
                 harmonics_list = list()
                 grasp_poses_list = list()
-                sample_center_points, sample_center_index = point_sampler(down_pcd_points.cpu().numpy(),
-                                                                          10, 0.052)
-                down_pcd_points_tensor = torch.tensor(down_pcd_points, dtype=torch.float32, requires_grad=False)
+                sample_center_points, sample_center_index = point_sampler(
+                    down_pcd_points.cpu().numpy(), 10, 0.052
+                )
+                down_pcd_points_tensor = torch.tensor(
+                    down_pcd_points, dtype=torch.float32, requires_grad=False
+                )
 
                 for order, center_point in enumerate(sample_center_points):
 
-                    center_point = torch.tensor(center_point, dtype=torch.float32, requires_grad=False).reshape(1,
-                                                                                                                3).to(
-                        config_file['orbit_grasper']['device'])
-                    edge_index = radius(down_pcd_points_tensor, center_point,
-                                        r=0.05, max_num_neighbors=900)
+                    center_point = (
+                        torch.tensor(
+                            center_point, dtype=torch.float32, requires_grad=False
+                        )
+                        .reshape(1, 3)
+                        .to(config_file["orbit_grasper"]["device"])
+                    )
+                    edge_index = radius(
+                        down_pcd_points_tensor,
+                        center_point,
+                        r=0.05,
+                        max_num_neighbors=900,
+                    )
                     points_down_mask = down_pcd_points[edge_index[1]]
                     normals_down_mask = down_pcd_normals[edge_index[1]]
 
-                    grasp_poses, points_list, normals_list, indices_list = sim.mask_all_actions_batch(points_down_mask,
-                                                                                                      normals_down_mask,
-                                                                                                      n_intervals=
-                                                                                                      config_file[
-                                                                                                          'orbit_grasper'][
-                                                                                                          'num_channel'],
-                                                                                                      z_thresh=0.052)
+                    grasp_poses, points_list, normals_list, indices_list = (
+                        sim.mask_all_actions_batch(
+                            points_down_mask,
+                            normals_down_mask,
+                            n_intervals=config_file["orbit_grasper"]["num_channel"],
+                            z_thresh=0.052,
+                        )
+                    )
                     if indices_list is None:
                         continue
                     grasp_indices = edge_index[1][indices_list]
@@ -153,13 +198,17 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                     itr = 0
                     while True:
                         mask_radius = distances.max() + temp_radius
-                        all_distances_to_center = torch.norm(down_pcd_points - mask_center, dim=1)
+                        all_distances_to_center = torch.norm(
+                            down_pcd_points - mask_center, dim=1
+                        )
                         sphere_mask = all_distances_to_center <= mask_radius
                         sphere_points = down_pcd_points[sphere_mask]
                         sphere_normals = down_pcd_normals[sphere_mask]
 
-                        if sphere_points.shape[0] <= max_allowed_points and sphere_points.shape[
-                            0] >= min_allowed_points:
+                        if (
+                            sphere_points.shape[0] <= max_allowed_points
+                            and sphere_points.shape[0] >= min_allowed_points
+                        ):
                             break
                         elif sphere_points.shape[0] > max_allowed_points:
                             temp_radius -= 0.005
@@ -173,8 +222,9 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                         if itr >= 30:
                             break
 
-                    if sphere_points.shape[0] > (max_allowed_points + 100) or sphere_points.shape[0] < (
-                            min_allowed_points - 100):
+                    if sphere_points.shape[0] > (
+                        max_allowed_points + 100
+                    ) or sphere_points.shape[0] < (min_allowed_points - 100):
                         continue
                     #     visulaize sphere points
                     #     pcd = o3d.geometry.PointCloud()
@@ -184,17 +234,21 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                     # pcd = o3d.geometry.PointCloud()
                     # pcd.points = o3d.utility.Vector3dVector(points_down_mask.cpu().numpy())
                     # o3d.visualization.draw_geometries([pcd])
-                    grasp_indices = grasp_indices.to(config_file['orbit_grasper']['device'])
+                    grasp_indices = grasp_indices.to(
+                        config_file["orbit_grasper"]["device"]
+                    )
                     grasp_quats = grasp_poses[:, :, -4:]
                     grasp_z = quaternion_to_z_direction(grasp_quats)
                     mask_harmonics = compute_spherical_harmonics(grasp_z, lmax=lmax)
 
-                    local_indices = \
-                        torch.arange(down_pcd_points.shape[0], device=config_file['orbit_grasper']['device'])[
-                            sphere_mask]
+                    local_indices = torch.arange(
+                        down_pcd_points.shape[0],
+                        device=config_file["orbit_grasper"]["device"],
+                    )[sphere_mask]
                     # get the local indices in the sphere points
                     sphere_indices, reorderded_indices = torch.where(
-                        local_indices.unsqueeze(1) == grasp_indices.unsqueeze(0))
+                        local_indices.unsqueeze(1) == grasp_indices.unsqueeze(0)
+                    )
 
                     reordered_grasp_poses = grasp_poses[reorderded_indices]
                     reordered_mask_harmonics = mask_harmonics[reorderded_indices.cpu()]
@@ -202,14 +256,22 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                     feature_points = FeaturedPoints(
                         x=sphere_points,
                         n=sphere_normals,
-                        b=torch.ones(sphere_points.shape[0], dtype=torch.long,
-                                     device=config_file['orbit_grasper']['device']))
+                        b=torch.ones(
+                            sphere_points.shape[0],
+                            dtype=torch.long,
+                            device=config_file["orbit_grasper"]["device"],
+                        ),
+                    )
 
                     feature_points = normalize(feature_points)
                     data_list.append(feature_points)
                     sphere_indices_list.append(sphere_indices)
                     grasping_indices_list.append(grasp_indices)
-                    harmonics_list.append(reordered_mask_harmonics.to(config_file['orbit_grasper']['device']))
+                    harmonics_list.append(
+                        reordered_mask_harmonics.to(
+                            config_file["orbit_grasper"]["device"]
+                        )
+                    )
                     grasp_poses_list.append(reordered_grasp_poses)
 
                 if len(data_list) == 0:
@@ -221,15 +283,22 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 # if still have memory overflow, you can split the data_list into multiple parts
                 midpoint = len(data_list) // 2
                 data_list1, data_list2 = data_list[:midpoint], data_list[midpoint:]
-                sphere_indices_list1, sphere_indices_list2 = sphere_indices_list[:midpoint], sphere_indices_list[
-                                                                                             midpoint:]
-                harmonics_list1, harmonics_list2 = harmonics_list[:midpoint], harmonics_list[midpoint:]
+                sphere_indices_list1, sphere_indices_list2 = (
+                    sphere_indices_list[:midpoint],
+                    sphere_indices_list[midpoint:],
+                )
+                harmonics_list1, harmonics_list2 = (
+                    harmonics_list[:midpoint],
+                    harmonics_list[midpoint:],
+                )
 
                 score_list1, feature_list1 = orbit_grasper.predict(
-                    data_list1, sphere_indices_list1, harmonics_list1)
+                    data_list1, sphere_indices_list1, harmonics_list1
+                )
 
                 score_list2, feature_list2 = orbit_grasper.predict(
-                    data_list2, sphere_indices_list2, harmonics_list2)
+                    data_list2, sphere_indices_list2, harmonics_list2
+                )
 
                 score_list = score_list1 + score_list2
 
@@ -237,12 +306,20 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 # score_list, fature_list = orbit_grasper.predict(data_list, sphere_indices_list,
                 #                                                 harmonics_list)  # [mask_num, n_points, m_intervals]
 
-                score_list = torch.cat(score_list, dim=0).cpu().numpy()  # [mask_num * n_points, m_intervals]
+                score_list = (
+                    torch.cat(score_list, dim=0).cpu().numpy()
+                )  # [mask_num * n_points, m_intervals]
 
                 grasp_poses_list = torch.cat(grasp_poses_list, dim=0)
                 # grasp_poses_list shape: [mask_num * n_points, m_intervals, 8]
-                grasp_poses_list = torch.cat([grasp_poses_list[:, :, :3], grasp_poses_list[:, :, -4:]],
-                                             dim=-1).cpu().numpy()
+                grasp_poses_list = (
+                    torch.cat(
+                        [grasp_poses_list[:, :, :3], grasp_poses_list[:, :, -4:]],
+                        dim=-1,
+                    )
+                    .cpu()
+                    .numpy()
+                )
 
                 grasp_normal_list = list()
                 for k, feature_point in enumerate(data_list):
@@ -260,7 +337,9 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 all_indices = []
 
                 for l in range(num_grasps):
-                    grasp_normals = np.array([grasp_normal_list[l]] * len(grasp_poses_list[l]))
+                    grasp_normals = np.array(
+                        [grasp_normal_list[l]] * len(grasp_poses_list[l])
+                    )
                     poses = np.array(grasp_poses_list[l])
                     positions = poses[:, :3]
                     rotations = poses[:, 3:]
@@ -275,7 +354,9 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 all_normals = np.vstack(all_normals)
                 all_indices = np.vstack(all_indices)
 
-                gripper_angle_masks = get_gripper_angle_mask_batch(Rotation.from_quat(all_rotations))
+                gripper_angle_masks = get_gripper_angle_mask_batch(
+                    Rotation.from_quat(all_rotations)
+                )
 
                 invalid_indices = np.where(gripper_angle_masks == False)[0]
                 score_list_flat = score_list.flatten()
@@ -290,8 +371,9 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
 
                 valid_indices_2 = all_indices[valid_indices]
                 actions = np.hstack((valid_positions, valid_rotations, valid_normals))
-                graspable_results, position_after_translations, new_rotations = sim.decode_action_batch(actions,
-                                                                                                        z_thresh=0.045)
+                graspable_results, position_after_translations, new_rotations = (
+                    sim.decode_action_batch(actions, z_thresh=0.045)
+                )
 
                 valid_score_list_flat[graspable_results == 0] = -np.inf
 
@@ -299,20 +381,28 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 score_list = score_list_flat.reshape(score_list.shape)
 
                 valid_indices_2 = valid_indices_2[graspable_results != 0]
-                position_after_translations = position_after_translations[graspable_results != 0]
+                position_after_translations = position_after_translations[
+                    graspable_results != 0
+                ]
                 new_rotations = new_rotations[graspable_results != 0]
 
                 filtered_grasp_poses = np.copy(grasp_poses_list)
 
-                for idx, pos_after_trans, new_rot in zip(valid_indices_2, position_after_translations, new_rotations):
+                for idx, pos_after_trans, new_rot in zip(
+                    valid_indices_2, position_after_translations, new_rotations
+                ):
                     l, q = idx
-                    trans_matrix = Transform(Rotation.from_quat(new_rot), pos_after_trans).as_matrix()
+                    trans_matrix = Transform(
+                        Rotation.from_quat(new_rot), pos_after_trans
+                    ).as_matrix()
                     z_mask = get_gripper_points_mask(trans_matrix, threshold=0.045)
 
                     if not z_mask:
                         score_list[l][q] = -np.inf
                     else:
-                        filtered_grasp_poses[l][q] = np.concatenate([pos_after_trans, new_rot])
+                        filtered_grasp_poses[l][q] = np.concatenate(
+                            [pos_after_trans, new_rot]
+                        )
 
                 # filtered_grasp_poses = grasp_poses_list.copy()
                 # for l in range(score_list.shape[0]):
@@ -343,23 +433,35 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 #         else:
                 #             score_list[l][q] = -np.inf
 
-                if scene == 'pile':
+                if scene == "pile":
                     # best_pose_index_flat = np.argmax(score_list)
                     # best_pose_index = np.unravel_index(best_pose_index_flat, score_list.shape)
                     # best_grasp_pose = filtered_grasp_poses[best_pose_index[0]][best_pose_index[1]]
                     while True:
                         best_pose_index_flat = np.argmax(score_list)
-                        best_pose_index = np.unravel_index(best_pose_index_flat, score_list.shape)
-                        best_grasp_pose = filtered_grasp_poses[best_pose_index[0]][best_pose_index[1]]
-                        finger_positions = sim.calculate_rectangle_vertices(length=0.09, width=0.018, height=0.009,
-                                                                            tcp=best_grasp_pose[:3],
-                                                                            quat=best_grasp_pose[3:])
+                        best_pose_index = np.unravel_index(
+                            best_pose_index_flat, score_list.shape
+                        )
+                        best_grasp_pose = filtered_grasp_poses[best_pose_index[0]][
+                            best_pose_index[1]
+                        ]
+                        finger_positions = sim.calculate_rectangle_vertices(
+                            length=0.09,
+                            width=0.018,
+                            height=0.009,
+                            tcp=best_grasp_pose[:3],
+                            quat=best_grasp_pose[3:],
+                        )
                         if np.all(finger_positions[:, 2] > 0.052):
                             break
                         else:
-                            graspable, poses, rotations = modify_vertical_offset(best_grasp_pose[:3],
-                                                                                 best_grasp_pose[3:],
-                                                                                 finger_positions, 0.007, 0.052)
+                            graspable, poses, rotations = modify_vertical_offset(
+                                best_grasp_pose[:3],
+                                best_grasp_pose[3:],
+                                finger_positions,
+                                0.007,
+                                0.052,
+                            )
                             if graspable:
                                 best_grasp_pose = np.concatenate([poses, rotations])
                                 break
@@ -377,19 +479,29 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                             cur_thresh -= 0.5
                         candidate_grasp_poses = filtered_grasp_poses[candidate_score]
                     # select the highest z
-                    highest_z_grasp_pose = candidate_grasp_poses[np.argmax(candidate_grasp_poses[:, 2])]
+                    highest_z_grasp_pose = candidate_grasp_poses[
+                        np.argmax(candidate_grasp_poses[:, 2])
+                    ]
                     highest_z = highest_z_grasp_pose[2]
-                    highest_z_score = score_list[candidate_score][np.argmax(candidate_grasp_poses[:, 2])]
+                    highest_z_score = score_list[candidate_score][
+                        np.argmax(candidate_grasp_poses[:, 2])
+                    ]
                     within_1cm_indices = np.where(
-                        (highest_z - 0.015 <= candidate_grasp_poses[:, 2]) & (
-                                candidate_grasp_poses[:, 2] < highest_z))
+                        (highest_z - 0.015 <= candidate_grasp_poses[:, 2])
+                        & (candidate_grasp_poses[:, 2] < highest_z)
+                    )
 
                     if len(within_1cm_indices[0]) > 0:
                         within_1cm_poses = candidate_grasp_poses[within_1cm_indices]
-                        within_1cm_scores = score_list[candidate_score][within_1cm_indices]
+                        within_1cm_scores = score_list[candidate_score][
+                            within_1cm_indices
+                        ]
 
                         max_within_1cm_score_idx = np.argmax(within_1cm_scores)
-                        if within_1cm_scores[max_within_1cm_score_idx] > highest_z_score:
+                        if (
+                            within_1cm_scores[max_within_1cm_score_idx]
+                            > highest_z_score
+                        ):
                             best_grasp_pose = within_1cm_poses[max_within_1cm_score_idx]
                         else:
                             best_grasp_pose = highest_z_grasp_pose
@@ -399,7 +511,9 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
                 pos = best_grasp_pose[:3]
                 rot = best_grasp_pose[3:]
                 action = [pos, rot]
-                grasp_success, width, description = sim.execute_grasp_fast(action, remove=True, waitTime=2)
+                grasp_success, width, description = sim.execute_grasp_fast(
+                    action, remove=True, waitTime=2
+                )
 
                 cnt += 1
                 if grasp_success:
@@ -418,19 +532,45 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
             success_rate = 100.0 * success / cnt
             declutter_rate = 100.0 * success / total_objs
 
-            print('success grasp:', success, 'total grasp:', cnt, 'total objects:', total_objs, 'grasped objs:',
-                  grasped_objs, 'remain objs:', remain_objs)
-            print('Grasp success rate: %.2f %%, Declutter rate: %.2f %%' % (
-                success_rate, declutter_rate))
-            write_test(base_path / config_file["test"]["root_dir"], success, cnt, total_objs, grasped_objs, remain_objs,
-                       success_rate, declutter_rate, scene)
+            print(
+                "success grasp:",
+                success,
+                "total grasp:",
+                cnt,
+                "total objects:",
+                total_objs,
+                "grasped objs:",
+                grasped_objs,
+                "remain objs:",
+                remain_objs,
+            )
+            print(
+                "Grasp success rate: %.2f %%, Declutter rate: %.2f %%"
+                % (success_rate, declutter_rate)
+            )
+            write_test(
+                base_path / config_file["test"]["root_dir"],
+                success,
+                cnt,
+                total_objs,
+                grasped_objs,
+                remain_objs,
+                success_rate,
+                declutter_rate,
+                scene,
+            )
 
         log = [success_rate, declutter_rate]
         success_list.append(success_rate)
         declutter_list.append(declutter_rate)
 
         record.append(log)
-        write_log(base_path / config_file["test"]["root_dir"], success_rate, declutter_rate, scene)
+        write_log(
+            base_path / config_file["test"]["root_dir"],
+            success_rate,
+            declutter_rate,
+            scene,
+        )
 
         # if test_unseen:
         #     np.save(Path.cwd() / 'test_gsr_dr_mask_random/unseen_record_{}_{}_{}'.format(RUN, objs_num, policy_name), np.asarray(record))
@@ -441,10 +581,12 @@ def grasp_test_random(initial_radius=0.035, max_allowed_points=900, min_allowed_
 
     avg_success_rate = sum(success_list) / len(success_list)
     avg_declutter_rate = sum(declutter_list) / len(declutter_list)
-    print('Average success', avg_success_rate, 'Average declutter', avg_declutter_rate)
+    print("Average success", avg_success_rate, "Average declutter", avg_declutter_rate)
 
 
-def modify_vertical_offset(position_after_translation, rot, finger_positions, vertical_offset, z_thresh):
+def modify_vertical_offset(
+    position_after_translation, rot, finger_positions, vertical_offset, z_thresh
+):
     rotation = Rotation.from_quat(rot)
     global_z_direction = rotation.apply([0, 0, 1])
 
@@ -465,9 +607,11 @@ def modify_vertical_offset(position_after_translation, rot, finger_positions, ve
 
 
 def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
-    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(voxel_size=voxel_size,
-                                                                           min_bound=original_pcd.get_min_bound(),
-                                                                           max_bound=original_pcd.get_max_bound())
+    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(
+        voxel_size=voxel_size,
+        min_bound=original_pcd.get_min_bound(),
+        max_bound=original_pcd.get_max_bound(),
+    )
 
     new_normals = np.asarray(down_pcd.normals)
     norms = np.linalg.norm(new_normals, axis=1, keepdims=True)
@@ -482,7 +626,9 @@ def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
         original_normals = np.asarray(original_pcd.normals)[traced_indices[i]]
 
         if original_normals.size > 0:
-            closest_z_normal = original_normals[np.abs(original_normals[:, 2]).argmin(), 2]
+            closest_z_normal = original_normals[
+                np.abs(original_normals[:, 2]).argmin(), 2
+            ]
 
             # if -0.2 < closest_z_normal < -0.1:
             #     closest_z_normal += 0.1
@@ -490,9 +636,9 @@ def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
             #     closest_z_normal -= 0.1
 
             x, y, _ = new_normals[i]
-            xy_squared = x ** 2 + y ** 2
+            xy_squared = x**2 + y**2
             if xy_squared > 1e-8:
-                alpha = np.sqrt((1 - closest_z_normal ** 2) / xy_squared)
+                alpha = np.sqrt((1 - closest_z_normal**2) / xy_squared)
                 down_pcd_normal_xy = np.array([x * alpha, y * alpha])
             else:
                 down_pcd_normal_xy = np.array([0, 0])
@@ -521,13 +667,15 @@ def quaternion_to_z_direction(quaternions):
     rotations = Rotation.from_quat(quaternions_np.reshape(-1, 4))
     z_axis = np.array([0, 0, -1])
     z_rotated = rotations.apply(z_axis)
-    z_rotated_tensor = torch.from_numpy(z_rotated).view(quaternions_np.shape[0], quaternions_np.shape[1], 3)
+    z_rotated_tensor = torch.from_numpy(z_rotated).view(
+        quaternions_np.shape[0], quaternions_np.shape[1], 3
+    )
 
     return z_rotated_tensor.detach()
 
 
 def vector_to_spherical(vectors):
-    r = torch.sqrt(torch.sum(vectors ** 2, dim=-1))
+    r = torch.sqrt(torch.sum(vectors**2, dim=-1))
 
     theta = torch.acos(vectors[..., 1] / r)
     phi = torch.atan2(vectors[..., 0], vectors[..., 2])
@@ -538,7 +686,9 @@ def compute_spherical_harmonics(vectors, lmax=3):
     r, theta, phi = vector_to_spherical(vectors)
     harmonics_list = []
     for l in range(lmax + 1):
-        harmonics = spherical_harmonics_alpha_beta(l, phi, theta, normalization='component')
+        harmonics = spherical_harmonics_alpha_beta(
+            l, phi, theta, normalization="component"
+        )
         harmonics_list.append(harmonics)
     harmonics = torch.cat(harmonics_list, dim=-1)
     return harmonics.detach()
@@ -564,20 +714,20 @@ def get_gripper_angle_mask_batch(rotations, threshold=75):
 
 
 def load_config(config_path):
-    with open(config_path, 'r') as file:
+    with open(config_path, "r") as file:
         return yaml.safe_load(file)
 
 
 def find_checkpoint(root_dir, prefix):
     files = os.listdir(root_dir)
-    matching_files = [f for f in files if f'-ckpt-{prefix}-' in f and f.endswith('.pt')]
+    matching_files = [f for f in files if f"-ckpt-{prefix}-" in f and f.endswith(".pt")]
     if not matching_files:
         raise ValueError(f"No checkpoints found with prefix '{prefix}' in '{root_dir}'")
     matching_files.sort(reverse=True)
     return matching_files[0]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     config_path = Path(__file__).resolve().parent / "multi_config.yaml"
     # config_path = "./training_config.yaml"
     config = load_config(config_path)

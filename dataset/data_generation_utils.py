@@ -114,31 +114,37 @@ def show_anns(anns, ax, draw_bbox=False):
     ax.set_autoscale_on(False)
     rng = np.random.RandomState()
 
-    img = np.ones((anns[0]['segmentation'].shape[0],
-                   anns[0]['segmentation'].shape[1], 4))
+    img = np.ones(
+        (anns[0]["segmentation"].shape[0], anns[0]["segmentation"].shape[1], 4)
+    )
     img[:, :, 3] = 0
 
     for ann in anns:
-        m = ann['segmentation']
+        m = ann["segmentation"]
         rgb_color = rng.random(3).astype(np.float32)
         alpha = np.asarray([0.35]).astype(np.float32)
         color_mask = np.concatenate([rgb_color, alpha])
         img[m] = color_mask
         if draw_bbox:
-            x, y, w, h = ann['bbox']
+            x, y, w, h = ann["bbox"]
 
             bbox = patches.Rectangle(
-                (x, y), w, h, linewidth=3, edgecolor=rgb_color, facecolor='None')
+                (x, y), w, h, linewidth=3, edgecolor=rgb_color, facecolor="None"
+            )
             ax.add_patch(bbox)
     ax.imshow(img)
 
 
-def voxel_down_sample_with_multiple_masks(original_pcd, voxel_size, masks_arr, gt_seg_arr=None, cluster_num=2):
+def voxel_down_sample_with_multiple_masks(
+    original_pcd, voxel_size, masks_arr, gt_seg_arr=None, cluster_num=2
+):
     # Due to the point cloud has the masks from the pretrained model, we need to downsample the point cloud as well as the masks.
 
-    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(voxel_size=voxel_size,
-                                                                           min_bound=original_pcd.get_min_bound(),
-                                                                           max_bound=original_pcd.get_max_bound())
+    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(
+        voxel_size=voxel_size,
+        min_bound=original_pcd.get_min_bound(),
+        max_bound=original_pcd.get_max_bound(),
+    )
 
     new_normals = np.asarray(down_pcd.normals)
     norms = np.linalg.norm(new_normals, axis=1, keepdims=True)
@@ -153,7 +159,9 @@ def voxel_down_sample_with_multiple_masks(original_pcd, voxel_size, masks_arr, g
         original_normals = np.asarray(original_pcd.normals)[traced_indices[i]]
 
         if original_normals.size > 0:
-            closest_z_normal = original_normals[np.abs(original_normals[:, 2]).argmin(), 2]
+            closest_z_normal = original_normals[
+                np.abs(original_normals[:, 2]).argmin(), 2
+            ]
 
             #############################################################################################
             ## Fix the normal direction of the point cloud for the points close to the table,          ##
@@ -170,9 +178,9 @@ def voxel_down_sample_with_multiple_masks(original_pcd, voxel_size, masks_arr, g
                 closest_z_normal -= 0.1
 
             x, y, _ = new_normals[i]
-            xy_squared = x ** 2 + y ** 2
+            xy_squared = x**2 + y**2
             if xy_squared > 1e-8:
-                alpha = np.sqrt((1 - closest_z_normal ** 2) / xy_squared)
+                alpha = np.sqrt((1 - closest_z_normal**2) / xy_squared)
                 down_pcd_normal_xy = np.array([x * alpha, y * alpha])
             else:
                 down_pcd_normal_xy = np.array([0, 0])
@@ -205,7 +213,9 @@ def voxel_down_sample_with_multiple_masks(original_pcd, voxel_size, masks_arr, g
             down_pcd_masks_list.append(down_pcd_masks)
         else:
             n_clusters = mask_pcd_coord.shape[0] // 300 + 1
-            cluster_masks, _ = kmeans_on_masked_points(down_pcd, down_pcd_masks, n_clusters)
+            cluster_masks, _ = kmeans_on_masked_points(
+                down_pcd, down_pcd_masks, n_clusters
+            )
             down_pcd_masks_list.extend(cluster_masks[:cluster_num])
     down_pcd_masks_list_denoise = pcd_mask_denoise(down_pcd, down_pcd_masks_list)
 
@@ -225,13 +235,15 @@ def kmeans_on_masked_points(pcd, mask, n_clusters):
     cluster_masks = []
     for i in range(n_clusters):
         cluster_mask = np.zeros(len(pcd.points), dtype=bool)
-        cluster_mask[mask] = (labels == i)
+        cluster_mask[mask] = labels == i
         cluster_masks.append(cluster_mask)
 
     return cluster_masks, labels
 
 
-def pcd_mask_denoise(downsampled_pcd, masks_list, eps=0.01, min_points=5, min_cluster_size=10):
+def pcd_mask_denoise(
+    downsampled_pcd, masks_list, eps=0.01, min_points=5, min_cluster_size=10
+):
     updated_masks_list = []
 
     for mask in masks_list:
@@ -242,8 +254,14 @@ def pcd_mask_denoise(downsampled_pcd, masks_list, eps=0.01, min_points=5, min_cl
         masked_point_cloud = o3d.geometry.PointCloud()
         masked_point_cloud.points = o3d.utility.Vector3dVector(masked_points)
 
-        labels = np.array(masked_point_cloud.cluster_dbscan(eps=eps, min_points=min_points, print_progress=False))
-        updated_mask = np.full(shape=len(downsampled_pcd.points), fill_value=False, dtype=bool)
+        labels = np.array(
+            masked_point_cloud.cluster_dbscan(
+                eps=eps, min_points=min_points, print_progress=False
+            )
+        )
+        updated_mask = np.full(
+            shape=len(downsampled_pcd.points), fill_value=False, dtype=bool
+        )
 
         for k in range(labels.max() + 1):
             cluster_mask = labels == k
@@ -258,9 +276,11 @@ def pcd_mask_denoise(downsampled_pcd, masks_list, eps=0.01, min_points=5, min_cl
 
 
 def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
-    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(voxel_size=voxel_size,
-                                                                           min_bound=original_pcd.get_min_bound(),
-                                                                           max_bound=original_pcd.get_max_bound())
+    down_pcd, _, traced_indices = original_pcd.voxel_down_sample_and_trace(
+        voxel_size=voxel_size,
+        min_bound=original_pcd.get_min_bound(),
+        max_bound=original_pcd.get_max_bound(),
+    )
 
     new_normals = np.asarray(down_pcd.normals)
     norms = np.linalg.norm(new_normals, axis=1, keepdims=True)
@@ -274,7 +294,9 @@ def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
         original_normals = np.asarray(original_pcd.normals)[traced_indices[i]]
 
         if original_normals.size > 0:
-            closest_z_normal = original_normals[np.abs(original_normals[:, 2]).argmin(), 2]
+            closest_z_normal = original_normals[
+                np.abs(original_normals[:, 2]).argmin(), 2
+            ]
 
             #############################################################################################
             ## Fix the normal direction of the point cloud for the points close to the table,          ##
@@ -290,9 +312,9 @@ def voxel_down_sample(original_pcd, voxel_size, gt_seg_arr=None):
                 closest_z_normal -= 0.1
 
             x, y, _ = new_normals[i]
-            xy_squared = x ** 2 + y ** 2
+            xy_squared = x**2 + y**2
             if xy_squared > 1e-8:
-                alpha = np.sqrt((1 - closest_z_normal ** 2) / xy_squared)
+                alpha = np.sqrt((1 - closest_z_normal**2) / xy_squared)
                 down_pcd_normal_xy = np.array([x * alpha, y * alpha])
             else:
                 down_pcd_normal_xy = np.array([0, 0])
@@ -323,16 +345,18 @@ def check_normal_availability(normal, threshold=10):
 
 
 def get_gripper_points(trans):
-    gripper_points_sim = np.array([
-        [0.012, 0.09, -0.04],
-        [0.012, -0.09, -0.04],
-        [-0.012, 0.09, -0.04],
-        [-0.012, -0.09, -0.04],
-
-        [0.018, 0.09, -0.11],
-        [0.018, -0.09, -0.11],
-        [-0.018, 0.09, -0.11],
-        [-0.018, -0.09, -0.11]])
+    gripper_points_sim = np.array(
+        [
+            [0.012, 0.09, -0.04],
+            [0.012, -0.09, -0.04],
+            [-0.012, 0.09, -0.04],
+            [-0.012, -0.09, -0.04],
+            [0.018, 0.09, -0.11],
+            [0.018, -0.09, -0.11],
+            [-0.018, 0.09, -0.11],
+            [-0.018, -0.09, -0.11],
+        ]
+    )
 
     gripper_points_sim = trans[:3, :3] @ gripper_points_sim.transpose()
     gripper_points_sim = gripper_points_sim.transpose()
@@ -361,12 +385,30 @@ def get_gripper_angle_mask(rot, threshold=75):
     return angle_deg > threshold
 
 
-def data_save(filename, mode, pcd_points, pcd_normals, sample_index, grasping_pose, success, object_num):
-    assert mode in ['ab', 'wb']
+def data_save(
+    filename,
+    mode,
+    pcd_points,
+    pcd_normals,
+    sample_index,
+    grasping_pose,
+    success,
+    object_num,
+):
+    assert mode in ["ab", "wb"]
 
     local_vars = locals()
-    data_to_save = {k: local_vars[k] for k in
-                    ['pcd_points', 'pcd_normals', 'sample_index', 'grasping_pose', 'success', 'object_num']}
+    data_to_save = {
+        k: local_vars[k]
+        for k in [
+            "pcd_points",
+            "pcd_normals",
+            "sample_index",
+            "grasping_pose",
+            "success",
+            "object_num",
+        ]
+    }
 
     with open(filename, mode) as f:
         pickle.dump(data_to_save, f)  # type: ignore

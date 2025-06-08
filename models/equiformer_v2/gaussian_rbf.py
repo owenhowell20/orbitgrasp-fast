@@ -24,9 +24,13 @@ def soft_cutoff(x, thr: float = 0.8, n: int = 3):
 
 
 @torch.jit.script
-def soft_square_cutoff(x, thr: float = 0.8, n: int = 3, infinite: bool = False) -> torch.Tensor:
+def soft_square_cutoff(
+    x, thr: float = 0.8, n: int = 3, infinite: bool = False
+) -> torch.Tensor:
     if infinite:
-        return soft_cutoff(x, thr=thr, n=n) * (x > 0.5) + soft_cutoff(1 - x, thr=thr, n=n) * (x <= 0.5)
+        return soft_cutoff(x, thr=thr, n=n) * (x > 0.5) + soft_cutoff(
+            1 - x, thr=thr, n=n
+        ) * (x <= 0.5)
     else:
         return (x > 0.5) + soft_cutoff(1 - x, thr=thr, n=n) * (x <= 0.5)
 
@@ -62,36 +66,58 @@ class GaussianRadialBasisLayer(torch.nn.Module):
         return x
 
     def extra_repr(self):
-        return 'mean_init_max={}, mean_init_min={}, std_init_max={}, std_init_min={}'.format(
-            self.mean_init_max, self.mean_init_min, self.std_init_max, self.std_init_min)
+        return "mean_init_max={}, mean_init_min={}, std_init_max={}, std_init_min={}".format(
+            self.mean_init_max, self.mean_init_min, self.std_init_max, self.std_init_min
+        )
 
 
 # From Diffusion-EDF
 class GaussianRadialBasisLayerFiniteCutoff(torch.nn.Module):
-    def __init__(self, num_basis: int, cutoff: float, soft_cutoff: bool = True, offset: Optional[float] = None,
-                 cutoff_thr_ratio: float = 0.8, infinite: bool = False):
+    def __init__(
+        self,
+        num_basis: int,
+        cutoff: float,
+        soft_cutoff: bool = True,
+        offset: Optional[float] = None,
+        cutoff_thr_ratio: float = 0.8,
+        infinite: bool = False,
+    ):
         super().__init__()
         self.num_basis: int = num_basis
         self.cutoff: float = float(cutoff)
         if offset is None:
-            offset = 0.01 * self.cutoff  # For stability, weights should be zero when edge length is very small (otherwise, gradients of spherical harmonics would blow up).
+            offset = (
+                0.01 * self.cutoff
+            )  # For stability, weights should be zero when edge length is very small (otherwise, gradients of spherical harmonics would blow up).
         self.offset: float = float(offset)
-        if self.offset < 0.:
-            warnings.warn(f"Negative offset ({self.offset}) is provided for radial basis encoder. Are you sure?")
+        if self.offset < 0.0:
+            warnings.warn(
+                f"Negative offset ({self.offset}) is provided for radial basis encoder. Are you sure?"
+            )
 
         self.mean_init_max = 1.0
         self.mean_init_min = 0
-        mean = torch.linspace(self.mean_init_min, self.mean_init_max, self.num_basis + 2)[1:-1].unsqueeze(0)
+        mean = torch.linspace(
+            self.mean_init_min, self.mean_init_max, self.num_basis + 2
+        )[1:-1].unsqueeze(0)
         self.mean = torch.nn.Parameter(mean)
 
-        self.std_logit = torch.nn.Parameter(torch.zeros(1, self.num_basis))  # Softplus logit
-        self.weight_logit = torch.nn.Parameter(torch.zeros(1, self.num_basis))  # Sigmoid logit
+        self.std_logit = torch.nn.Parameter(
+            torch.zeros(1, self.num_basis)
+        )  # Softplus logit
+        self.weight_logit = torch.nn.Parameter(
+            torch.zeros(1, self.num_basis)
+        )  # Sigmoid logit
 
         init_std = 2.0 / self.num_basis
-        torch.nn.init.constant_(self.std_logit, math.log(math.exp((init_std)) - 1))  # Inverse Softplus
+        torch.nn.init.constant_(
+            self.std_logit, math.log(math.exp((init_std)) - 1)
+        )  # Inverse Softplus
 
-        self.max_weight = 4.
-        torch.nn.init.constant_(self.weight_logit, -math.log(self.max_weight / 1. - 1))  # Inverse Softplus
+        self.max_weight = 4.0
+        torch.nn.init.constant_(
+            self.weight_logit, -math.log(self.max_weight / 1.0 - 1)
+        )  # Inverse Softplus
 
         self.soft_cutoff: bool = soft_cutoff
         self.cutoff_thr_ratio: float = cutoff_thr_ratio
@@ -111,6 +137,8 @@ class GaussianRadialBasisLayerFiniteCutoff(torch.nn.Module):
         x = torch.sigmoid(self.weight_logit) * self.max_weight * x
 
         if self.soft_cutoff is True:
-            x = x * soft_square_cutoff(dist, thr=self.cutoff_thr_ratio, infinite=self.infinite)
+            x = x * soft_square_cutoff(
+                dist, thr=self.cutoff_thr_ratio, infinite=self.infinite
+            )
 
         return x * self.normalizer

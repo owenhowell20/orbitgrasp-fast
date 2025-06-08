@@ -12,13 +12,13 @@ class SmoothLeakyReLU(torch.nn.Module):
         return x1 + x2
 
     def extra_repr(self):
-        return 'negative_slope={}'.format(self.alpha)
+        return "negative_slope={}".format(self.alpha)
 
 
 class S2Activation(torch.nn.Module):
-    '''
-        Assume we only have one resolution
-    '''
+    """
+    Assume we only have one resolution
+    """
 
     def __init__(self, lmax, mmax):
         super().__init__()
@@ -27,7 +27,9 @@ class S2Activation(torch.nn.Module):
         self.act = torch.nn.SiLU()
 
     def forward(self, inputs, SO3_grid):
-        to_grid_mat = SO3_grid[self.lmax][self.mmax].get_to_grid_mat(device=None)  # `device` is not used
+        to_grid_mat = SO3_grid[self.lmax][self.mmax].get_to_grid_mat(
+            device=None
+        )  # `device` is not used
         from_grid_mat = SO3_grid[self.lmax][self.mmax].get_from_grid_mat(device=None)
         x_grid = torch.einsum("bai, zic -> zbac", to_grid_mat, inputs)
         x_grid = self.act(x_grid)
@@ -47,10 +49,12 @@ class SeparableS2Activation(torch.nn.Module):
 
     def forward(self, input_scalars, input_tensors, SO3_grid):
         output_scalars = self.scalar_act(input_scalars)
-        output_scalars = output_scalars.reshape(output_scalars.shape[0], 1, output_scalars.shape[-1])
+        output_scalars = output_scalars.reshape(
+            output_scalars.shape[0], 1, output_scalars.shape[-1]
+        )
         output_tensors = self.s2_act(input_tensors, SO3_grid)
         outputs = torch.cat(
             (output_scalars, output_tensors.narrow(1, 1, output_tensors.shape[1] - 1)),
-            dim=1
+            dim=1,
         )
         return outputs

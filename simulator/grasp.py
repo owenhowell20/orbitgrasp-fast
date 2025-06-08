@@ -7,8 +7,7 @@ class Label(enum.IntEnum):
 
 
 class Grasp(object):
-    """Grasp parameterized as pose of a 2-finger robot hand.
-    """
+    """Grasp parameterized as pose of a 2-finger robot hand."""
 
     def __init__(self, pose, width):
         self.pose = pose

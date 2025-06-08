@@ -1,14 +1,13 @@
 import torch
 
-'''
+"""
 The original method used in equiformer_v2 generates a random vector 
 and two 90-degree rotated versions to ensure it's not aligned with `norm_x`. 
 It selects the least aligned vector by calculating dot products. 
 The new method simplifies this by using fixed vectors (`[1, 0, 0]`, `[0, 1, 0]`, `[0, 0, 1]`) 
 and directly selecting the one least aligned with `norm_x`. 
 This method eliminates randomness and makes the process more deterministic while maintaining the alignment condition.
-'''
-
+"""
 
 
 def init_edge_rot_mat_deterministic(edge_distance_vec):
@@ -22,7 +21,11 @@ def init_edge_rot_mat_deterministic(edge_distance_vec):
     norm_x = edge_vec_0 / (edge_vec_0_distance.view(-1, 1))
 
     # Use multiple "fixed" vectors and choose one that is least aligned with norm_x
-    fixed_vecs = torch.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], device=edge_vec_0.device, dtype=edge_vec_0.dtype)
+    fixed_vecs = torch.tensor(
+        [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+        device=edge_vec_0.device,
+        dtype=edge_vec_0.dtype,
+    )
     dot_products = torch.abs(torch.matmul(norm_x, fixed_vecs.t()))
     # Find index of the minimum dot product for each norm_x
     min_indices = torch.argmin(dot_products, dim=1)

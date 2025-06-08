@@ -3,9 +3,9 @@ import torch.nn as nn
 
 
 class RadialFunction(nn.Module):
-    '''
-        Construct a radial function (linear layers + layer normalization + SiLU) given a list of channels
-    '''
+    """
+    Construct a radial function (linear layers + layer normalization + SiLU) given a list of channels
+    """
 
     def __init__(self, channels_list):
         super().__init__()

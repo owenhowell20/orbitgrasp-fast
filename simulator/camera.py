@@ -19,12 +19,12 @@ import numpy as np
 import pybullet as p
 
 
-class RealSenseD415():
+class RealSenseD415:
     """Default configuration with 3 RealSense RGB-D cameras."""
 
     # Mimic RealSense D415 RGB-D camera parameters.
     image_size = (480, 640)
-    intrinsics = (450., 0, 320., 0, 450., 240., 0, 0, 1)
+    intrinsics = (450.0, 0, 320.0, 0, 450.0, 240.0, 0, 0, 1)
     # intrinsics = (540., 0, 320., 0, 540., 240., 0, 0, 1)
 
     # Set default camera poses.
@@ -38,30 +38,32 @@ class RealSenseD415():
     right_rotation = (np.pi / 2.5, np.pi, 3 * np.pi / 4)
     right_rotation = p.getQuaternionFromEuler(right_rotation)
     # Default camera configs.
-    CONFIG = [{
-        'image_size': image_size,
-        'intrinsics': intrinsics,
-        'position': front_position,
-        'rotation': front_rotation,
-        'zrange': (0.01, 2.),
-        'noise': False,
-        'name': 'front'
-    },
+    CONFIG = [
         {
-            'image_size': image_size,
-            'intrinsics': intrinsics,
-            'position': left_position,
-            'rotation': left_rotation,
-            'zrange': (0.01, 2.),
-            'noise': False,
-            'name': 'left'
+            "image_size": image_size,
+            "intrinsics": intrinsics,
+            "position": front_position,
+            "rotation": front_rotation,
+            "zrange": (0.01, 2.0),
+            "noise": False,
+            "name": "front",
         },
         {
-            'image_size': image_size,
-            'intrinsics': intrinsics,
-            'position': right_position,
-            'rotation': right_rotation,
-            'zrange': (0.01, 2.),
-            'noise': False,
-            'name': 'right'
-        }]
+            "image_size": image_size,
+            "intrinsics": intrinsics,
+            "position": left_position,
+            "rotation": left_rotation,
+            "zrange": (0.01, 2.0),
+            "noise": False,
+            "name": "left",
+        },
+        {
+            "image_size": image_size,
+            "intrinsics": intrinsics,
+            "position": right_position,
+            "rotation": right_rotation,
+            "zrange": (0.01, 2.0),
+            "noise": False,
+            "name": "right",
+        },
+    ]

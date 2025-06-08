@@ -86,8 +86,7 @@ def transform_pointcloud(points, transform):
       points: HxWx3 float array of transformed 3D points.
     """
     padding = ((0, 0), (0, 0), (0, 1))
-    homogen_points = np.pad(points.copy(), padding,
-                            'constant', constant_values=1)
+    homogen_points = np.pad(points.copy(), padding, "constant", constant_values=1)
     for i in range(3):
         points[Ellipsis, i] = np.sum(transform[i, :] * homogen_points, axis=-1)
     return points
@@ -95,24 +94,35 @@ def transform_pointcloud(points, transform):
 
 def reconstruct_inbound_imgs_and_pcd(colors, depths, configs, bounds):
     """Return in_bounds heightmaps. colormaps and pcd."""
-    pcds_xyz, pcds_rgb, inbound_colormaps, inbound_depthmaps = list(), list(), list(), list()
+    pcds_xyz, pcds_rgb, inbound_colormaps, inbound_depthmaps = (
+        list(),
+        list(),
+        list(),
+        list(),
+    )
     if len(colors) == 480:
         colors = colors[None]
         depths = depths[None]
         configs = [configs]
     for color, depth, config in zip(colors, depths, configs):
-        intrinsics = np.array(config['intrinsics']).reshape(3, 3)
+        intrinsics = np.array(config["intrinsics"]).reshape(3, 3)
         xyz = get_pointcloud(depth, intrinsics)
-        position = np.array(config['position']).reshape(3, 1)
-        rotation = p.getMatrixFromQuaternion(config['rotation'])
+        position = np.array(config["position"]).reshape(3, 1)
+        rotation = p.getMatrixFromQuaternion(config["rotation"])
         rotation = np.array(rotation).reshape(3, 3)
         transform = np.eye(4)
         transform[:3, :] = np.hstack((rotation, position))
         points = transform_pointcloud(xyz, transform)
 
-        ix = (points[Ellipsis, 0] >= bounds[0, 0]) & (points[Ellipsis, 0] < bounds[0, 1])
-        iy = (points[Ellipsis, 1] >= bounds[1, 0]) & (points[Ellipsis, 1] < bounds[1, 1])
-        iz = (points[Ellipsis, 2] >= bounds[2, 0]) & (points[Ellipsis, 2] < bounds[2, 1])
+        ix = (points[Ellipsis, 0] >= bounds[0, 0]) & (
+            points[Ellipsis, 0] < bounds[0, 1]
+        )
+        iy = (points[Ellipsis, 1] >= bounds[1, 0]) & (
+            points[Ellipsis, 1] < bounds[1, 1]
+        )
+        iz = (points[Ellipsis, 2] >= bounds[2, 0]) & (
+            points[Ellipsis, 2] < bounds[2, 1]
+        )
         valid = ix & iy & iz
 
         points_xyz = (points * valid[..., None]).reshape(-1, 3)
@@ -131,10 +141,10 @@ def reconstruct_heightmaps(colors, depths, configs, bounds, pixel_size):
     """Reconstruct top-down heightmap views from multiple 3D pointclouds."""
     heightmaps, colormaps = [], []
     for color, depth, config in zip(colors, depths, configs):
-        intrinsics = np.array(config['intrinsics']).reshape(3, 3)
+        intrinsics = np.array(config["intrinsics"]).reshape(3, 3)
         xyz = get_pointcloud(depth, intrinsics)
-        position = np.array(config['position']).reshape(3, 1)
-        rotation = p.getMatrixFromQuaternion(config['rotation'])
+        position = np.array(config["position"]).reshape(3, 1)
+        rotation = p.getMatrixFromQuaternion(config["rotation"])
         rotation = np.array(rotation).reshape(3, 3)
         transform = np.eye(4)
         transform[:3, :] = np.hstack((rotation, position))
@@ -147,8 +157,9 @@ def reconstruct_heightmaps(colors, depths, configs, bounds, pixel_size):
 
 def get_inbound_imgs_and_pcd(color, height, configs, bounds):
     """Reconstruct orthographic heightmaps with segmentation masks."""
-    pcds_xyz, pcds_rgb, inbound_colormaps, inbound_depthmaps = reconstruct_inbound_imgs_and_pcd(color, height, configs,
-                                                                                                bounds)
+    pcds_xyz, pcds_rgb, inbound_colormaps, inbound_depthmaps = (
+        reconstruct_inbound_imgs_and_pcd(color, height, configs, bounds)
+    )
     pcds_xyz = np.concatenate(pcds_xyz, axis=0)
     pcds_rgb = np.concatenate(pcds_rgb, axis=0)
     inbound_colormaps = np.asarray(inbound_colormaps, dtype=np.uint8)
@@ -160,6 +171,7 @@ def get_inbound_imgs_and_pcd(color, height, configs, bounds):
 # -----------------------------------------------------------------------------
 # SAMPLER UTILS
 # -----------------------------------------------------------------------------
+
 
 class FarthestSampler:
     def __init__(self):
@@ -189,7 +201,8 @@ class FarthestSampler:
             farthest_pts[i] = filtered_pts[index]
             index_list.append(valid_indices[index])
             distances = np.minimum(
-                distances, self._calc_distances(farthest_pts[i], filtered_pts))
+                distances, self._calc_distances(farthest_pts[i], filtered_pts)
+            )
         return farthest_pts, index_list
 
 
@@ -197,7 +210,8 @@ class AngleBasedSampler:
     """Sample k points based on their angle with respect to the Z axis, considering a Z threshold.
     The larger the angle, the higher the probability of being selected.
     We would use the normal vector of the point cloud to calculate the angle.
-    This process is reasonable because the successful grasp usually happeds with the large angle w.r.t the Z axis."""
+    This process is reasonable because the successful grasp usually happeds with the large angle w.r.t the Z axis.
+    """
 
     def __init__(self):
         pass
@@ -225,8 +239,12 @@ class AngleBasedSampler:
         weights = self._calc_angle_weights(normals[valid_indices])
 
         # Use weighted random sampling to select k points
-        chosen_indices = np.random.choice(len(filtered_pts), size=k, replace=False, p=weights)
+        chosen_indices = np.random.choice(
+            len(filtered_pts), size=k, replace=False, p=weights
+        )
         sampled_pts = filtered_pts[chosen_indices]
-        original_indices = valid_indices[chosen_indices]  # Map back to original indices from the full list
+        original_indices = valid_indices[
+            chosen_indices
+        ]  # Map back to original indices from the full list
 
         return sampled_pts, original_indices

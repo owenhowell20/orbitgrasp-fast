@@ -31,7 +31,8 @@ class FarthestSampler:
             farthest_pts[i] = pts[index]
             index_list.append(index)
             distances = np.minimum(
-                distances, self._calc_distances(farthest_pts[i], pts))
+                distances, self._calc_distances(farthest_pts[i], pts)
+            )
         return farthest_pts, index_list
 
 
@@ -53,21 +54,25 @@ class FarthestSamplerTorch:
             index = torch.argmax(distances)
             farthest_pts[i] = pts[index]
             index_list.append(index)
-            distances = torch.minimum(distances, self._calc_distances(farthest_pts[i], pts))
+            distances = torch.minimum(
+                distances, self._calc_distances(farthest_pts[i], pts)
+            )
         return farthest_pts, index_list
 
 
 def get_gripper_points(trans):
-    gripper_points_sim = np.array([
-        [0.012, 0.09, -0.04],
-        [0.012, -0.09, -0.04],
-        [-0.012, 0.09, -0.04],
-        [-0.012, -0.09, -0.04],
-
-        [0.018, 0.09, -0.11],
-        [0.018, -0.09, -0.11],
-        [-0.018, 0.09, -0.11],
-        [-0.018, -0.09, -0.11]])
+    gripper_points_sim = np.array(
+        [
+            [0.012, 0.09, -0.04],
+            [0.012, -0.09, -0.04],
+            [-0.012, 0.09, -0.04],
+            [-0.012, -0.09, -0.04],
+            [0.018, 0.09, -0.11],
+            [0.018, -0.09, -0.11],
+            [-0.018, 0.09, -0.11],
+            [-0.018, -0.09, -0.11],
+        ]
+    )
 
     gripper_points_sim = trans[:3, :3] @ gripper_points_sim.transpose()
     gripper_points_sim = gripper_points_sim.transpose()

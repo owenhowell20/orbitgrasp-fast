@@ -5,7 +5,9 @@ from pathlib import Path
 import argparse
 
 
-def split_and_rename_dataset(camera_setting, root_dirs, output_dir, train_ratio=0.8, file_extension=".pkl"):
+def split_and_rename_dataset(
+    camera_setting, root_dirs, output_dir, train_ratio=0.8, file_extension=".pkl"
+):
     """
     Splits dataset files into training and testing sets, renames them, and organizes into folders.
 
@@ -18,7 +20,10 @@ def split_and_rename_dataset(camera_setting, root_dirs, output_dir, train_ratio=
     Returns:
     - None
     """
-    root_dirs = [str(Path(root_dirs) / f"packed_{camera_setting}"), str(Path(root_dirs) / f"pile_{camera_setting}")]
+    root_dirs = [
+        str(Path(root_dirs) / f"packed_{camera_setting}"),
+        str(Path(root_dirs) / f"pile_{camera_setting}"),
+    ]
     all_files = []
     for root_dir in root_dirs:
         for root, _, files in os.walk(root_dir):
@@ -60,14 +65,18 @@ def split_and_rename_dataset(camera_setting, root_dirs, output_dir, train_ratio=
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--camera_setting', type=str, default='single')
+    parser.add_argument("--camera_setting", type=str, default="single")
     parser.add_argument(
-        '--root_dir', type=str,
+        "--root_dir",
+        type=str,
         default=str(Path(__file__).resolve().parent / "collected_data/se3_filtered"),
     )
-    parser.add_argument('--output_dir', type=str,
-                        default=str(Path(__file__).resolve().parent / "collected_data/se3_filtered"))
-    parser.add_argument('--train_ratio', type=float, default=0.8)
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default=str(Path(__file__).resolve().parent / "collected_data/se3_filtered"),
+    )
+    parser.add_argument("--train_ratio", type=float, default=0.8)
     args = parser.parse_args()
 
     root_dir = args.root_dir
@@ -75,4 +84,10 @@ if __name__ == "__main__":
     train_ratio = args.train_ratio
     camera_setting = args.camera_setting
 
-    split_and_rename_dataset(camera_setting, root_dir, output_dir, train_ratio=train_ratio, file_extension=".pkl")
+    split_and_rename_dataset(
+        camera_setting,
+        root_dir,
+        output_dir,
+        train_ratio=train_ratio,
+        file_extension=".pkl",
+    )

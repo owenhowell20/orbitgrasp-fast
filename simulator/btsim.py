@@ -40,9 +40,13 @@ class BtWorld(object):
     def set_gravity(self, gravity):
         self.p.setGravity(*gravity)
 
-    def load_urdf(self, urdf_path, pose, scale=1.0, env_obj=False, color=None, return_color=False):
+    def load_urdf(
+        self, urdf_path, pose, scale=1.0, env_obj=False, color=None, return_color=False
+    ):
         # the plane don't have mass
-        body, color = Body.from_urdf(self.p, urdf_path, pose, scale, table=env_obj, color_=color)
+        body, color = Body.from_urdf(
+            self.p, urdf_path, pose, scale, table=env_obj, color_=color
+        )
         if not env_obj:
             self.bodies[body.uid] = body
         if return_color:
@@ -136,7 +140,9 @@ class Body(object):
             self.links[link_name] = Link(self.p, self.uid, i)
 
     @classmethod
-    def from_urdf(cls, physics_client, urdf_path, pose, scale, table=False, color_=None):
+    def from_urdf(
+        cls, physics_client, urdf_path, pose, scale, table=False, color_=None
+    ):
         body_uid = physics_client.loadURDF(
             str(urdf_path),
             pose.translation,
@@ -153,8 +159,7 @@ class Body(object):
             else:
                 color = class_rng.uniform(0.6, 1, (4,))
                 color[-1] = 1
-            physics_client.changeDynamics(body_uid, -1, mass=0.5,
-                                          lateralFriction=1.)
+            physics_client.changeDynamics(body_uid, -1, mass=0.5, lateralFriction=1.0)
             physics_client.changeVisualShape(body_uid, -1, rgbaColor=color)
             return cls(physics_client, body_uid), color
         return cls(physics_client, body_uid), None
@@ -171,24 +176,32 @@ class Body(object):
 
         obj_edge_max = 0.15 * scale  # the maximum edge size of an obj before scaling
         obj_edge_min = 0.014 * scale  # the minimum edge size of an obj before scaling
-        obj_volume_max = 0.0006 * (scale ** 3)  # the maximum volume of an obj before scaling
+        obj_volume_max = 0.0006 * (
+            scale**3
+        )  # the maximum volume of an obj before scaling
         obj_scale = scale
         # print(str(obj_filepath))
         while True:
-            obj_visual = pb.createVisualShape(pb.GEOM_MESH,
-                                              fileName=str(obj_filepath),
-                                              rgbaColor=color,
-                                              meshScale=[obj_scale, obj_scale, obj_scale])
+            obj_visual = pb.createVisualShape(
+                pb.GEOM_MESH,
+                fileName=str(obj_filepath),
+                rgbaColor=color,
+                meshScale=[obj_scale, obj_scale, obj_scale],
+            )
 
-            obj_collision = pb.createCollisionShape(pb.GEOM_MESH,
-                                                    fileName=str(obj_filepath),
-                                                    meshScale=[obj_scale, obj_scale, obj_scale])
+            obj_collision = pb.createCollisionShape(
+                pb.GEOM_MESH,
+                fileName=str(obj_filepath),
+                meshScale=[obj_scale, obj_scale, obj_scale],
+            )
 
-            object_id = pb.createMultiBody(baseMass=0.15,
-                                           baseCollisionShapeIndex=obj_collision,
-                                           baseVisualShapeIndex=obj_visual,
-                                           basePosition=pose.translation,
-                                           baseOrientation=pose.rotation.as_quat())
+            object_id = pb.createMultiBody(
+                baseMass=0.15,
+                baseCollisionShapeIndex=obj_collision,
+                baseVisualShapeIndex=obj_visual,
+                basePosition=pose.translation,
+                baseOrientation=pose.rotation.as_quat(),
+            )
 
             aabb = pb.getAABB(object_id)
             aabb = np.asarray(aabb)
@@ -206,8 +219,14 @@ class Body(object):
             else:
                 break
 
-        pb.changeDynamics(object_id, -1, lateralFriction=0.75, spinningFriction=0.001, rollingFriction=0.001,
-                          linearDamping=0.0)
+        pb.changeDynamics(
+            object_id,
+            -1,
+            lateralFriction=0.75,
+            spinningFriction=0.001,
+            rollingFriction=0.001,
+            linearDamping=0.0,
+        )
         return cls(pb, object_id), color
 
     def get_pose(self):
@@ -278,7 +297,7 @@ class Joint(object):
             jointIndex=self.joint_index,
             controlMode=pybullet.POSITION_CONTROL,
             targetPosition=position,
-            force=self.effort
+            force=self.effort,
         )
 
 
@@ -289,16 +308,16 @@ class Constraint(object):
     """
 
     def __init__(
-            self,
-            physics_client,
-            parent,
-            parent_link,
-            child,
-            child_link,
-            joint_type,
-            joint_axis,
-            parent_frame,
-            child_frame,
+        self,
+        physics_client,
+        parent,
+        parent_link,
+        child,
+        child_link,
+        joint_type,
+        joint_axis,
+        parent_frame,
+        child_frame,
     ):
         """
         Create a new constraint between links of bodies.
@@ -416,7 +435,7 @@ class Contact(object):
 
 class Camera2(object):
     """Virtual RGB-D camera based on the PyBullet camera interface.
-        Attributes:
+    Attributes:
 
     """
 
@@ -434,14 +453,14 @@ class Camera2(object):
         self._random = np.random.RandomState(int(time.time()))
         look_dir = np.float32([0, 0, 1]).reshape(3, 1)
         up_dir = np.float32([0, -1, 0]).reshape(3, 1)
-        rotation = self.p.getMatrixFromQuaternion(config['rotation'])
+        rotation = self.p.getMatrixFromQuaternion(config["rotation"])
         rot_m = np.float32(rotation).reshape(3, 3)
         look_dir = (rot_m @ look_dir).reshape(-1)
         up_dir = (rot_m @ up_dir).reshape(-1)
-        lookat = config['position'] + look_dir
-        focal_len = config['intrinsics'][0]
-        z_near, z_far = config['zrange']
-        view_m = self.p.computeViewMatrix(config['position'], lookat, up_dir)
+        lookat = config["position"] + look_dir
+        focal_len = config["intrinsics"][0]
+        z_near, z_far = config["zrange"]
+        view_m = self.p.computeViewMatrix(config["position"], lookat, up_dir)
         # def decompose_view_matrix(view_matrix):
         #     """ Decompose the view matrix to camera position and orientation """
         #     view_matrix = np.array(view_matrix).reshape(4, 4).T
@@ -465,34 +484,35 @@ class Camera2(object):
         # self.p.addUserDebugLine(cam_pos, cam_pos + cam_rot[:, 1] * axis_length, [0, 1, 0])
         # self.p.addUserDebugLine(cam_pos, cam_pos + cam_rot[:, 2] * axis_length, [0, 0, 1])
 
-        fov_h = (config['image_size'][0] / 2) / focal_len
+        fov_h = (config["image_size"][0] / 2) / focal_len
         fov_h = 180 * np.arctan(fov_h) * 2 / np.pi
 
         # Notes: 1) FOV is vertical FOV 2) aspect must be float
-        aspect_ratio = config['image_size'][1] / config['image_size'][0]
+        aspect_ratio = config["image_size"][1] / config["image_size"][0]
         proj_m = self.p.computeProjectionMatrixFOV(fov_h, aspect_ratio, z_near, z_far)
 
         # Render with OpenGL camera settings.
         _, _, color, depth, segm = self.p.getCameraImage(
-            height=config['image_size'][0],
-            width=config['image_size'][1],
+            height=config["image_size"][0],
+            width=config["image_size"][1],
             viewMatrix=view_m,
             projectionMatrix=proj_m,
             shadow=0,
             flags=self.p.ER_SEGMENTATION_MASK_OBJECT_AND_LINKINDEX,
             # renderer=self.p.ER_BULLET_HARDWARE_OPENGL)
-            renderer=self.p.ER_TINY_RENDERER)
+            renderer=self.p.ER_TINY_RENDERER,
+        )
 
         # Get color image.
-        color_image_size = (config['image_size'][0], config['image_size'][1], 4)
+        color_image_size = (config["image_size"][0], config["image_size"][1], 4)
         color = np.array(color, dtype=np.uint8).reshape(color_image_size)
         color = color[:, :, :3]  # remove alpha channel
 
         # Get depth image.
-        depth_image_size = (config['image_size'][0], config['image_size'][1])
+        depth_image_size = (config["image_size"][0], config["image_size"][1])
         zbuffer = np.array(depth).reshape(depth_image_size)
-        depth = (z_far + z_near - (2. * zbuffer - 1.) * (z_far - z_near))
-        depth = (2. * z_near * z_far) / depth
+        depth = z_far + z_near - (2.0 * zbuffer - 1.0) * (z_far - z_near)
+        depth = (2.0 * z_near * z_far) / depth
 
         # Get segmentation image.
         segm = np.uint8(segm).reshape(depth_image_size)

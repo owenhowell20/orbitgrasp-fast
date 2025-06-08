@@ -3,7 +3,7 @@ import uuid
 import pandas as pd
 from grasp import Grasp
 import numpy as np
-from utils.transform import Rotation,Transform
+from utils.transform import Rotation, Transform
 
 
 def write_setup(root, size, intrinsic, max_opening_width, finger_depth):
@@ -31,11 +31,15 @@ def write_sensor_data(root, depth_imgs, extrinsics):
     np.savez_compressed(path, depth_imgs=depth_imgs, extrinsics=extrinsics)
     return scene_id
 
+
 def write_mesh_data(root, vertices, faces, vertice_normals):
     scene_id = uuid.uuid4().hex
     path = root / "meshes" / (scene_id + ".npz")
-    np.savez_compressed(path, vertices=vertices, faces=faces,vertice_normals=vertice_normals)
+    np.savez_compressed(
+        path, vertices=vertices, faces=faces, vertice_normals=vertice_normals
+    )
     return scene_id
+
 
 def write_pcd(root, vertices, vertice_normals):
     scene_id = uuid.uuid4().hex
@@ -43,28 +47,52 @@ def write_pcd(root, vertices, vertice_normals):
     np.savez_compressed(path, vertices=vertices, vertice_normals=vertice_normals)
     return scene_id
 
-def write__mesh_data_with_antipodal(root, vertices, faces, vertice_normals,reasonable_index):
+
+def write__mesh_data_with_antipodal(
+    root, vertices, faces, vertice_normals, reasonable_index
+):
     scene_id = uuid.uuid4().hex
     path = root / "meshes" / (scene_id + ".npz")
-    np.savez_compressed(path, vertices=vertices, faces=faces,vertice_normals=vertice_normals,index=reasonable_index)
+    np.savez_compressed(
+        path,
+        vertices=vertices,
+        faces=faces,
+        vertice_normals=vertice_normals,
+        index=reasonable_index,
+    )
     return scene_id
-def write_mesh_data_with_corr(root, vertices, faces, vertice_normals,reasonable_index,corr):
+
+
+def write_mesh_data_with_corr(
+    root, vertices, faces, vertice_normals, reasonable_index, corr
+):
     scene_id = uuid.uuid4().hex
     path = root / "meshes" / (scene_id + ".npz")
-    np.savez_compressed(path, vertices=vertices, faces=faces,vertice_normals=vertice_normals,index=reasonable_index, corr=corr)
+    np.savez_compressed(
+        path,
+        vertices=vertices,
+        faces=faces,
+        vertice_normals=vertice_normals,
+        index=reasonable_index,
+        corr=corr,
+    )
     return scene_id
+
 
 def read_sensor_data(root, scene_id):
     data = np.load(root / "scenes" / (scene_id + ".npz"))
     return data["depth_imgs"], data["extrinsics"]
 
+
 def read_mesh_data(root, scene_id):
     data = np.load(root / "meshes" / (scene_id + ".npz"))
-    return data["vertices"], data["faces"], data['vertice_normals']
+    return data["vertices"], data["faces"], data["vertice_normals"]
+
 
 def read_mesh_data_antipodal(root, scene_id):
     data = np.load(root / "meshes" / (scene_id + ".npz"))
-    return data["vertices"], data["faces"], data['vertice_normals'],data['index']
+    return data["vertices"], data["faces"], data["vertice_normals"], data["index"]
+
 
 def write_grasp(root, scene_id, grasp, label):
     # TODO concurrent writes could be an issue
@@ -79,48 +107,166 @@ def write_grasp(root, scene_id, grasp, label):
     width = grasp.width
     append_csv(csv_path, scene_id, qx, qy, qz, qw, x, y, z, width, label)
 
-def write_grasp_new(root, scene_id, grasp, label,idx_global,antipodal_seen_label,pitch_idx):
+
+def write_grasp_new(
+    root, scene_id, grasp, label, idx_global, antipodal_seen_label, pitch_idx
+):
     # TODO concurrent writes could be an issue
     csv_path = root / "grasps_new.csv"
     if not csv_path.exists():
         create_csv(
             csv_path,
-            ["scene_id", "qx", "qy", "qz", "qw", "x", "y", "z", "width", "label","idx_gobal","antipodal_seen_label","pitch_idx"],
+            [
+                "scene_id",
+                "qx",
+                "qy",
+                "qz",
+                "qw",
+                "x",
+                "y",
+                "z",
+                "width",
+                "label",
+                "idx_gobal",
+                "antipodal_seen_label",
+                "pitch_idx",
+            ],
         )
     qx, qy, qz, qw = grasp.pose.rotation.as_quat()
     x, y, z = grasp.pose.translation
     width = grasp.width
-    append_csv(csv_path, scene_id, qx, qy, qz, qw, x, y, z, width, label,idx_global,antipodal_seen_label,pitch_idx)
+    append_csv(
+        csv_path,
+        scene_id,
+        qx,
+        qy,
+        qz,
+        qw,
+        x,
+        y,
+        z,
+        width,
+        label,
+        idx_global,
+        antipodal_seen_label,
+        pitch_idx,
+    )
 
-def write_grasp_mutil_labels(root, scene_id, grasp, label, idx_global,pitch_idx,labels):
+
+def write_grasp_mutil_labels(
+    root, scene_id, grasp, label, idx_global, pitch_idx, labels
+):
     # TODO concurrent writes could be an issue
     csv_path = root / "grasps_multi_labels.csv"
     if not csv_path.exists():
         create_csv(
             csv_path,
-            ["scene_id", "qx", "qy", "qz", "qw", "x", "y", "z", "width", "label","idx_gobal","pitch_idx",
-             "label_0", "label_1", "label_2", "label_3", "label_4", "label_5",
-             "label_6", "label_7", "label_8",],
+            [
+                "scene_id",
+                "qx",
+                "qy",
+                "qz",
+                "qw",
+                "x",
+                "y",
+                "z",
+                "width",
+                "label",
+                "idx_gobal",
+                "pitch_idx",
+                "label_0",
+                "label_1",
+                "label_2",
+                "label_3",
+                "label_4",
+                "label_5",
+                "label_6",
+                "label_7",
+                "label_8",
+            ],
         )
     qx, qy, qz, qw = grasp.pose.rotation.as_quat()
     x, y, z = grasp.pose.translation
     width = grasp.width
-    append_csv(csv_path, scene_id, qx, qy, qz, qw, x, y, z, width, label, idx_global, pitch_idx,
-               labels[0],labels[1],labels[2],labels[3],labels[4],labels[5],
-               labels[6],labels[7],labels[8],)
+    append_csv(
+        csv_path,
+        scene_id,
+        qx,
+        qy,
+        qz,
+        qw,
+        x,
+        y,
+        z,
+        width,
+        label,
+        idx_global,
+        pitch_idx,
+        labels[0],
+        labels[1],
+        labels[2],
+        labels[3],
+        labels[4],
+        labels[5],
+        labels[6],
+        labels[7],
+        labels[8],
+    )
 
-def write_grasp_corr(root, scene_id, grasp, label,idx_global,idx_reasonable,antipodal_seen_label,pitch_idx):
+
+def write_grasp_corr(
+    root,
+    scene_id,
+    grasp,
+    label,
+    idx_global,
+    idx_reasonable,
+    antipodal_seen_label,
+    pitch_idx,
+):
     # TODO concurrent writes could be an issue
     csv_path = root / "grasps_new.csv"
     if not csv_path.exists():
         create_csv(
             csv_path,
-            ["scene_id", "qx", "qy", "qz", "qw", "x", "y", "z", "width", "label","idx_gobal","idx_reasonable","antipodal_seen_label","pitch_idx",],
+            [
+                "scene_id",
+                "qx",
+                "qy",
+                "qz",
+                "qw",
+                "x",
+                "y",
+                "z",
+                "width",
+                "label",
+                "idx_gobal",
+                "idx_reasonable",
+                "antipodal_seen_label",
+                "pitch_idx",
+            ],
         )
     qx, qy, qz, qw = grasp.pose.rotation.as_quat()
     x, y, z = grasp.pose.translation
     width = grasp.width
-    append_csv(csv_path, scene_id, qx, qy, qz, qw, x, y, z, width, label,idx_global,idx_reasonable,antipodal_seen_label,pitch_idx)
+    append_csv(
+        csv_path,
+        scene_id,
+        qx,
+        qy,
+        qz,
+        qw,
+        x,
+        y,
+        z,
+        width,
+        label,
+        idx_global,
+        idx_reasonable,
+        antipodal_seen_label,
+        pitch_idx,
+    )
+
 
 def read_grasp(df, i):
     scene_id = df.loc[i, "scene_id"]
