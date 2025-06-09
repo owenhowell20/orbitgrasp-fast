@@ -436,7 +436,6 @@ class EquiformerUnet(nn.Module):
         self.apply(self._uniform_init_rad_func_linear_weights)
 
     def forward(self, pcds):
-
         if isinstance(pcds, list):
             batch_list = []
             node_coord_list = []
@@ -473,84 +472,15 @@ class EquiformerUnet(nn.Module):
         downstream_edges = []
         downstream_coords = []
         for n, block in enumerate(self.down_blocks):
-            pool_graph = block["pool"](node_coord_src=node_coord, batch_src=batch)
-            node_coord_dst, edge_src, edge_dst, degree, batch_dst, node_idx = pool_graph
-
-            edge_distance_vec = node_coord.index_select(
-                0, edge_src
-            ) - node_coord_dst.index_select(0, edge_dst)
-            edge_distance_vec = edge_distance_vec.detach()
-            edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
-
-            # Compute 3x3 rotation matrix per edge
-            edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
-
-            # Initialize the WignerD matrices and other values for spherical harmonic calculations
-            for i in range(self.num_resolutions):
-                self.SO3_rotation[i].set_wigner(edge_rot_mat)
-
-            if node_src is None:
-                node_src = SO3_Embedding(
-                    num_points,
-                    self.lmax_list,
-                    self.sphere_channels[n],
-                    self.device,
-                    self.dtype,
-                )
-
-                # offset_res = 0
-                # offset = 0
-
-                node_embedding = SO3_Embedding(
-                    num_points,
-                    self.lmax_list,
-                    1,
-                    self.device,
-                    self.dtype,
-                )
-                node_embedding.embedding[:, 1:4, :] = node_feature.unsqueeze(-1)
-
-                node_embedding = self.sphere_linear_so3(node_embedding)
-                node_src.set_embedding(node_embedding.embedding)
-
-            # Edge encoding (distance and atom edge)
-            edge_attr = block["distance_expansion"](edge_distance)
-
-            # Forward pass through model with mixed precision if CUDA is available
+            # Use mixed precision for pooling and graph operations
             with torch.amp.autocast(
                 device_type="cuda" if torch.cuda.is_available() else "cpu",
                 enabled=self.use_mixed_precision,
                 dtype=self.mixed_precision,
             ):
-                node_dst = SO3_Embedding(
-                    0,
-                    self.lmax_list,
-                    self.sphere_channels[n],
-                    self.device,
-                    self.dtype,
-                )
-
-            node_dst.set_embedding(node_src.embedding[node_idx])
-            node_dst.set_lmax_mmax(self.lmax_list.copy(), self.mmax_list.copy())
-            node_dst = block["transblock"](
-                node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
-            )
-            node_src = node_dst
-            node_coord_src = node_coord.clone()
-            node_coord = node_coord_dst
-            batch = batch_dst
-            downstream_outputs.append((node_src, node_coord_src, node_coord_dst, batch))
-            downstream_edges.append((edge_src, edge_dst, edge_distance, edge_rot_mat))
-            downstream_coords.append((node_coord_src, node_coord_dst))
-
-            if len(block["layer_stack"]) > 0:
-                radiusGraph = block["radius_graph"](
-                    node_coord_src=node_coord,
-                    node_feature_src=node_dst,
-                    batch_src=batch,
-                )
-                node_dst, node_coord_dst, edge_src, edge_dst, degree, batch_dst = (
-                    radiusGraph
+                pool_graph = block["pool"](node_coord_src=node_coord, batch_src=batch)
+                node_coord_dst, edge_src, edge_dst, degree, batch_dst, node_idx = (
+                    pool_graph
                 )
 
                 edge_distance_vec = node_coord.index_select(
@@ -566,11 +496,103 @@ class EquiformerUnet(nn.Module):
                 for i in range(self.num_resolutions):
                     self.SO3_rotation[i].set_wigner(edge_rot_mat)
 
-                edge_attr = block["layer_stack"][0](edge_distance)
-                for n, layer in enumerate(block["layer_stack"][1:]):
-                    node_dst = layer["transblock"](
-                        node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
+                if node_src is None:
+                    node_src = SO3_Embedding(
+                        num_points,
+                        self.lmax_list,
+                        self.sphere_channels[n],
+                        self.device,
+                        self.dtype,
                     )
+
+                    node_embedding = SO3_Embedding(
+                        num_points,
+                        self.lmax_list,
+                        1,
+                        self.device,
+                        self.dtype,
+                    )
+                    node_embedding.embedding[:, 1:4, :] = node_feature.unsqueeze(-1)
+
+                    node_embedding = self.sphere_linear_so3(node_embedding)
+                    node_src.set_embedding(node_embedding.embedding)
+
+                # Edge encoding (distance and atom edge)
+                edge_attr = block["distance_expansion"](edge_distance)
+
+                node_dst = SO3_Embedding(
+                    0,
+                    self.lmax_list,
+                    self.sphere_channels[n],
+                    self.device,
+                    self.dtype,
+                )
+
+            node_dst.set_embedding(node_src.embedding[node_idx])
+            node_dst.set_lmax_mmax(self.lmax_list.copy(), self.mmax_list.copy())
+
+            # Use mixed precision for attention and transformation blocks
+            with torch.amp.autocast(
+                device_type="cuda" if torch.cuda.is_available() else "cpu",
+                enabled=self.use_mixed_precision,
+                dtype=self.mixed_precision,
+            ):
+                node_dst = block["transblock"](
+                    node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
+                )
+
+            node_src = node_dst
+            node_coord_src = node_coord.clone()
+            node_coord = node_coord_dst
+            batch = batch_dst
+            downstream_outputs.append((node_src, node_coord_src, node_coord_dst, batch))
+            downstream_edges.append((edge_src, edge_dst, edge_distance, edge_rot_mat))
+            downstream_coords.append((node_coord_src, node_coord_dst))
+
+            if len(block["layer_stack"]) > 0:
+                with torch.amp.autocast(
+                    device_type="cuda" if torch.cuda.is_available() else "cpu",
+                    enabled=self.use_mixed_precision,
+                    dtype=self.mixed_precision,
+                ):
+                    radiusGraph = block["radius_graph"](
+                        node_coord_src=node_coord,
+                        node_feature_src=node_dst,
+                        batch_src=batch,
+                    )
+                    node_dst, node_coord_dst, edge_src, edge_dst, degree, batch_dst = (
+                        radiusGraph
+                    )
+
+                    edge_distance_vec = node_coord.index_select(
+                        0, edge_src
+                    ) - node_coord_dst.index_select(0, edge_dst)
+                    edge_distance_vec = edge_distance_vec.detach()
+                    edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
+
+                    # Compute 3x3 rotation matrix per edge
+                    edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
+
+                    # Initialize the WignerD matrices and other values for spherical harmonic calculations
+                    for i in range(self.num_resolutions):
+                        self.SO3_rotation[i].set_wigner(edge_rot_mat)
+
+                    edge_attr = block["layer_stack"][0](edge_distance)
+
+                for n, layer in enumerate(block["layer_stack"][1:]):
+                    with torch.amp.autocast(
+                        device_type="cuda" if torch.cuda.is_available() else "cpu",
+                        enabled=self.use_mixed_precision,
+                        dtype=self.mixed_precision,
+                    ):
+                        node_dst = layer["transblock"](
+                            node_src,
+                            node_dst,
+                            edge_attr,
+                            edge_src,
+                            edge_dst,
+                            batch=batch,
+                        )
                     node_src = node_dst
                     node_coord_src = node_coord.clone()
                     node_coord = node_coord_dst
@@ -583,12 +605,17 @@ class EquiformerUnet(nn.Module):
                     )
 
         ########### Middle Block #############
-        edge_attr = self.middle_blocks[0](edge_distance)
-        for n, block in enumerate(self.middle_blocks[1:]):
-            node_dst = block["transblock"](
-                node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
-            )
-            node_src = node_dst
+        with torch.amp.autocast(
+            device_type="cuda" if torch.cuda.is_available() else "cpu",
+            enabled=self.use_mixed_precision,
+            dtype=self.mixed_precision,
+        ):
+            edge_attr = self.middle_blocks[0](edge_distance)
+            for n, block in enumerate(self.middle_blocks[1:]):
+                node_dst = block["transblock"](
+                    node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
+                )
+                node_src = node_dst
 
         node_dst, node_coord_src, node_coord_dst, batch_dst = downstream_outputs.pop()
         node_src.embedding = (node_src.embedding + node_dst.embedding) / math.sqrt(
@@ -615,34 +642,37 @@ class EquiformerUnet(nn.Module):
                         3
                     )  # Skip connection.
 
-                    edge_distance_vec = node_coord_dst.index_select(
-                        0, edge_src
-                    ) - node_coord_dst.index_select(0, edge_dst)
-                    edge_distance_vec = edge_distance_vec.detach()
-                    edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
+                    with torch.amp.autocast(
+                        device_type="cuda" if torch.cuda.is_available() else "cpu",
+                        enabled=self.use_mixed_precision,
+                        dtype=self.mixed_precision,
+                    ):
+                        edge_distance_vec = node_coord_dst.index_select(
+                            0, edge_src
+                        ) - node_coord_dst.index_select(0, edge_dst)
+                        edge_distance_vec = edge_distance_vec.detach()
+                        edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
 
-                    if edge_attr is None:
-                        edge_attr = block["layer_stack"][0](edge_distance)
-                    else:
-                        edge_attr = edge_attr
-                    if edge_rot_mat is None:
-                        # Compute 3x3 rotation matrix per edge
-                        edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
-                        for ii in range(self.num_resolutions):
-                            self.SO3_rotation[ii].set_wigner(edge_rot_mat)
-                    else:
-                        edge_rot_mat = edge_rot_mat
+                        if edge_attr is None:
+                            edge_attr = block["layer_stack"][0](edge_distance)
+                        else:
+                            edge_attr = edge_attr
+                        if edge_rot_mat is None:
+                            # Compute 3x3 rotation matrix per edge
+                            edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
+                            for ii in range(self.num_resolutions):
+                                self.SO3_rotation[ii].set_wigner(edge_rot_mat)
+                        else:
+                            edge_rot_mat = edge_rot_mat
 
-                    # Initialize the WignerD matrices and other values for spherical harmonic calculations
-
-                    node_dst = block["layer_stack"][i + 1]["transblock"](
-                        node_src,
-                        node_dst,
-                        edge_attr,
-                        edge_src,
-                        edge_dst,
-                        batch=batch_dst,
-                    )
+                        node_dst = block["layer_stack"][i + 1]["transblock"](
+                            node_src,
+                            node_dst,
+                            edge_attr,
+                            edge_src,
+                            edge_dst,
+                            batch=batch_dst,
+                        )
                     node_src = node_dst
                     batch = batch_dst
 
@@ -654,30 +684,41 @@ class EquiformerUnet(nn.Module):
                 edge_src, edge_dst, edge_distance, _ = downstream_edges.pop()
                 edge_src, edge_dst = edge_dst, edge_src
 
-                edge_distance_vec = node_coord_dst.index_select(
-                    0, edge_src
-                ) - node_coord_src.index_select(0, edge_dst)
-                edge_distance_vec = edge_distance_vec.detach()
-                edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
+                with torch.amp.autocast(
+                    device_type="cuda" if torch.cuda.is_available() else "cpu",
+                    enabled=self.use_mixed_precision,
+                    dtype=self.mixed_precision,
+                ):
+                    edge_distance_vec = node_coord_dst.index_select(
+                        0, edge_src
+                    ) - node_coord_src.index_select(0, edge_dst)
+                    edge_distance_vec = edge_distance_vec.detach()
+                    edge_distance = torch.norm(edge_distance_vec, dim=-1).detach()
 
-                # Compute 3x3 rotation matrix per edge
-                edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
-                # Initialize the WignerD matrices and other values for spherical harmonic calculations
-                for i in range(self.num_resolutions):
-                    self.SO3_rotation[i].set_wigner(edge_rot_mat)
-                edge_attr = block["distance_expansion"](edge_distance)
-                node_dst = block["transblock"](
-                    node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
-                )
+                    # Compute 3x3 rotation matrix per edge
+                    edge_rot_mat = self._init_edge_rot_mat(edge_distance_vec)
+                    # Initialize the WignerD matrices and other values for spherical harmonic calculations
+                    for i in range(self.num_resolutions):
+                        self.SO3_rotation[i].set_wigner(edge_rot_mat)
+                    edge_attr = block["distance_expansion"](edge_distance)
+                    node_dst = block["transblock"](
+                        node_src, node_dst, edge_attr, edge_src, edge_dst, batch=batch
+                    )
                 node_src = node_dst
                 batch = batch_dst
 
-        # Final layer norm
-        node_src.embedding = self.norm_1(node_src.embedding)
-        node_dst.embedding = self.norm_2(node_dst.embedding)
-        point_features = self.output_layer(
-            node_src, node_dst, edge_attr, edge_src, edge_dst
-        )
+        # Final layer norm and output
+        with torch.amp.autocast(
+            device_type="cuda" if torch.cuda.is_available() else "cpu",
+            enabled=self.use_mixed_precision,
+            dtype=self.mixed_precision,
+        ):
+            # Final layer norm
+            node_src.embedding = self.norm_1(node_src.embedding)
+            node_dst.embedding = self.norm_2(node_dst.embedding)
+            point_features = self.output_layer(
+                node_src, node_dst, edge_attr, edge_src, edge_dst
+            )
 
         return point_features
 
